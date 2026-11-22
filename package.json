@@ -1,0 +1,26 @@
+{
+  "name": "loup-garou-bot",
+  "version": "1.0.0",
+  "description": "Bot WhatsApp du jeu du Loup-Garou (garde, sorcière, chasseur, voyante bavarde, loups, villageois)",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node index.js",
+    "start": "pm2 start ecosystem.config.cjs",
+    "stop": "pm2 stop loup-garou",
+    "restart": "pm2 restart loup-garou",
+    "delete": "pm2 delete loup-garou",
+    "logs": "pm2 logs loup-garou",
+    "status": "pm2 status"
+  },
+  "engines": {
+    "node": ">=20.12"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "latest",
+    "pino": "^9.0.0",
+    "pm2": "^5.4.0",
+    "qrcode-terminal": "^0.12.0",
+    "sharp": "^0.33.0"
+  }
+}
