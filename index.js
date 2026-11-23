@@ -741,13 +741,15 @@ const createWolfGroup = async (g) => {
     const welcome = await say(
       jid,
       `🐺 *LA MEUTE*\n\nBienvenue, loups-garous : ${listOf(wolves)}\n\n` +
-        `Ici, discutez librement et mettez-vous d’accord. Chaque nuit, la victime se choisit en répondant par un *numéro* à la carte que je vous envoie *en privé*.\n` +
         (WOLF_GROUP === 'keep'
-          ? `Les loups éliminés sont retirés du groupe, et il sera dissous à la fin de la partie. 🌕`
-          : `Je quitte ce groupe pour que personne d’autre que vous n’ait accès à vos messages. À la fin de la partie, quittez-le. 🌕`),
+          ? `🔒 Ce groupe est fermé, sauf pendant votre étape de nuit : la carte « Qui dévorer ? » arrivera *ici*, vous vous concerterez, puis vous voterez en envoyant *seulement un numéro*. ` +
+            `Les loups éliminés sont retirés du groupe, et il sera dissous à la fin de la partie. 🌕`
+          : `Ici, discutez librement et mettez-vous d’accord. Chaque nuit, la victime se choisit en répondant par un *numéro* à la carte que je vous envoie *en privé*.\n` +
+            `Je quitte ce groupe pour que personne d’autre que vous n’ait accès à vos messages. À la fin de la partie, quittez-le. 🌕`),
       jidsOf(wolves)
     )
     await say(g.key, '🐺 La meute a son propre groupe secret… 🤫')
+    if (WOLF_GROUP === 'keep') await setWolfGroupLocked(g, true)
     if (WOLF_GROUP === 'leave') {
       g.wolfGroup.present = false
       try {
@@ -813,8 +815,71 @@ const cleanupOrphans = async () => {
 
 const notifyWolfVote = (g, wolves, w, t) =>
   g.wolfGroup?.present
-    ? say(g.wolfGroup.jid, `🗳️ ${tag(w.jid)} vote contre *${plainName(t)}*`, [w.jid])
-    : Promise.all(wolves.filter((o) => o !== w).map((o) => sendText([o.dm, o.jid], `🐺 ${plainName(w)} vote contre *${plainName(t)}*.`, { destruct: SELF_DESTRUCT })))
+    ? say(g.wolfGroup.jid, `🗳️ ${tag(w.jid)} vote contre *${textName(t)}*`, [w.jid])
+    : Promise.all(wolves.filter((o) => o !== w).map((o) => sendText([o.dm, o.jid], `🐺 ${textName(w)} vote contre *${textName(t)}*.`, { destruct: SELF_DESTRUCT })))
+
+// Le groupe des loups (mode keep) n’est ouvert que pendant leur étape de nuit : le bot le ferme et le rouvre.
+const setWolfGroupLocked = async (g, locked) => {
+  const wg = g.wolfGroup
+  if (!wg?.present || WOLF_GROUP !== 'keep') return
+  try {
+    await sock.groupSettingUpdate(wg.jid, locked ? 'announcement' : 'not_announcement')
+    wg.locked = locked
+  } catch (e) {
+    console.warn('[loup-garou] verrouillage du groupe des loups impossible :', e.message)
+  }
+}
+
+// Vote de la meute DANS le groupe des loups : une carte commune, on vote en envoyant seulement un numéro.
+// Retourne true si le vote est ouvert dans le groupe (sinon : repli sur les cartes privées).
+const startWolfGroupVote = async (g, wolves, targets) => {
+  const wg = g.wolfGroup
+  if (!wg?.present) return false
+  const list = shuffle(targets)
+  await setWolfGroupLocked(g, false)
+  const fallback =
+    `🐺 *QUI DÉVORER ?* — Nuit ${g.nightNo}\n\n` + list.map((p, i) => `${i + 1}. ${textName(p)}`).join('\n')
+  try {
+    await say(
+      wg.jid,
+      `🌙 *Nuit ${g.nightNo}* — à vous de jouer, la meute ! 🐺\n` +
+        `Concertez-vous ici, puis votez en envoyant *seulement un numéro* (ex. : 3) d’après la carte ci-dessous.\n` +
+        `Le dernier vote de chacun compte • ⏱️ ${NIGHT_WOLF_SECONDS} s • le groupe se referme ensuite.`,
+      jidsOf(wolves)
+    )
+    if (ROLE_DELIVERY === 'text') await sock.sendMessage(wg.jid, { text: fallback })
+    else {
+      const image = await listCard({
+        role: 'loup',
+        title: 'QUI DÉVORER ?',
+        subtitle: `Nuit ${g.nightNo} • ${NIGHT_WOLF_SECONDS} s`,
+        items: list,
+        notes: ['Écrivez seulement un numéro dans le groupe pour voter.', 'Le dernier vote de chacun compte.'],
+      })
+      await sock.sendMessage(wg.jid, { image, mimetype: 'image/jpeg', caption: `🐺 *QUI DÉVORER ?* — Nuit ${g.nightNo}` })
+    }
+  } catch (e) {
+    console.warn('[loup-garou] carte de vote dans le groupe des loups impossible (repli en privé) :', e.message)
+    await setWolfGroupLocked(g, true)
+    return false
+  }
+  g.wolfVote = { list, wolves }
+  return true
+}
+
+const WOLF_VOTE_RE = /^\s*(?:vote\s+)?(\d{1,2})\s*$/i
+const wolfGroupVote = async (g, wolf, n) => {
+  const wv = g.wolfVote
+  if (!wv || g.phase !== 'night' || !wolf.alive) return
+  if (n < 1 || n > wv.list.length) {
+    await say(g.wolfGroup.jid, `⛔ ${tag(wolf.jid)} : numéro invalide (1 à ${wv.list.length}).`, [wolf.jid])
+    return
+  }
+  const target = wv.list[n - 1]
+  g.night.wolfVotes.set(wolf, target)
+  await notifyWolfVote(g, wv.wolves, wolf, target)
+  if (wv.wolves.every((w) => g.night.wolfVotes.has(w))) finishStep(g)
+}
 
 // ───────── Fin de partie ─────────
 const winnerOf = (g) => {
@@ -950,7 +1015,7 @@ const resolveDeaths = async (g, dead) => {
 }
 
 // ───────── Nuit ─────────
-const runStep = async (g, { role, start, end, seconds = NIGHT_STEP_SECONDS, canAct, setup, after }) => {
+const runStep = async (g, { role, start, end, seconds = NIGHT_STEP_SECONDS, canAct, setup, after, marks, tick }) => {
   // Rôle absent, ou dont tous les joueurs sont éliminés : plus d’annonce de réveil dans le groupe.
   // (Avec REVEAL_ROLES=false, on garde une étape « factice » : se taire révélerait le rôle du mort.)
   const holders = g.players.filter((p) => p.role === role)
@@ -960,7 +1025,7 @@ const runStep = async (g, { role, start, end, seconds = NIGHT_STEP_SECONDS, canA
   if (!alive(g)) return
   if (actors.length) {
     await setup(actors)
-    await waitStep(g, seconds, { min: NIGHT_MIN_STEP })
+    await waitStep(g, seconds, { min: NIGHT_MIN_STEP, marks, tick })
   } else {
     // Joueur sans pouvoir utilisable (ex. sorcière sans potion) ou mort en mode rôles cachés : attente aléatoire
     await waitStep(g, rand(NIGHT_MIN_STEP, seconds))
@@ -1032,6 +1097,8 @@ const stepLoups = (g) =>
     setup: async (wolves) => {
       g.night.wolfVotes = new Map()
       const targets = living(g).filter((p) => p.role !== 'loup')
+      // Groupe des loups ouvert : la carte de vote est envoyée DANS le groupe (pas en privé)
+      if (await startWolfGroupVote(g, wolves, targets)) return
       if (g.wolfGroup?.present) {
         await say(g.wolfGroup.jid, `🌙 *Nuit ${g.nightNo}* — à vous de jouer, la meute ! Concertez-vous ici, puis votez en répondant par un numéro à ma carte privée (⏱️ ${NIGHT_WOLF_SECONDS} s).`, jidsOf(wolves))
       }
@@ -1058,13 +1125,28 @@ const stepLoups = (g) =>
         await sleep(DM_DELAY_SECONDS * 250)
       }
     },
+    marks: [30, 10],
+    tick: (m) => {
+      const wv = g.wolfVote
+      if (!wv) return undefined
+      const pending = wv.wolves.filter((w) => !g.night.wolfVotes.has(w))
+      return say(g.wolfGroup.jid, `⏳ Plus que *${m} s* — ${g.night.wolfVotes.size}/${wv.wolves.length} vote(s).\n🕐 En attente : ${listOf(pending)}`, jidsOf(pending))
+    },
     after: async () => {
       const counts = new Map()
       for (const t of g.night.wolfVotes.values()) counts.set(t, (counts.get(t) || 0) + 1)
-      if (!counts.size) return
-      const max = Math.max(...counts.values())
-      g.night.wolfTarget = pick([...counts.entries()].filter(([, c]) => c === max).map(([t]) => t))
-      if (g.wolfGroup?.present) await say(g.wolfGroup.jid, `🎯 La meute a choisi sa victime : *${plainName(g.night.wolfTarget)}*.`)
+      if (counts.size) {
+        const max = Math.max(...counts.values())
+        g.night.wolfTarget = pick([...counts.entries()].filter(([, c]) => c === max).map(([t]) => t))
+        if (g.wolfGroup?.present) await say(g.wolfGroup.jid, `🎯 La meute a choisi sa victime : *${textName(g.night.wolfTarget)}*.`)
+      } else if (g.wolfGroup?.present) {
+        await say(g.wolfGroup.jid, '😴 Aucun vote : la meute reste affamée cette nuit.')
+      }
+      g.wolfVote = null
+      if (g.wolfGroup?.present && WOLF_GROUP === 'keep') {
+        await say(g.wolfGroup.jid, '🔒 Le groupe se referme jusqu’à la prochaine nuit.')
+        await setWolfGroupLocked(g, true)
+      }
     },
   })
 
@@ -1599,7 +1681,17 @@ const onMessage = async (m) => {
   const text = String(c?.conversation || c?.extendedTextMessage?.text || c?.imageMessage?.caption || c?.videoMessage?.caption || '').trim()
   if (m.key.fromMe && text && sentTexts.includes(text)) return
 
-  if (wolfGroups.has(chat)) return // groupe secret des loups : aucune commande ni vote ici
+  if (wolfGroups.has(chat)) {
+    // Groupe secret des loups : seuls les votes (un numéro seul) comptent ; aucune commande ici
+    const gw = [...games.values()].find((x) => x.wolfGroup?.jid === chat)
+    const mm = gw?.wolfVote && text ? WOLF_VOTE_RE.exec(text) : null
+    if (mm) {
+      const who = senderOf(m)
+      const wolf = who && gw.wolfVote.wolves.find((w) => hasId(w, who.ids))
+      if (wolf) await wolfGroupVote(gw, wolf, Number(mm[1]))
+    }
+    return
+  }
   const isGroup = chat.endsWith('@g.us')
 
   // Joueur éliminé qui écrit dans le groupe principal (texte, image, vocal, sticker…) : message supprimé

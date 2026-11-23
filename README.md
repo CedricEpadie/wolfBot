@@ -57,21 +57,26 @@ Un rôle encore en vie mais sans pouvoir utilisable (par exemple une sorcière s
 ## Groupe secret des loups
 
 Au début de la partie, le bot **crée un groupe WhatsApp réservé aux loups** (« 🐺 Meute — Loup-Garou ») et y ajoute les loups.
-Ils y discutent librement ; le vote de la victime se fait toujours par la carte numérotée reçue en privé, et le bot annonce
-dans le groupe de la meute qui vote contre qui et la victime retenue.
+
+**Mode `keep` (défaut) :**
+- Le groupe est **fermé** (seul le bot peut écrire) et ne s'ouvre que **pendant l'étape de nuit où les loups votent**.
+- À ce moment, le bot **rouvre le groupe** et y envoie la **carte « Qui dévorer ? »** (une seule carte commune, **pas de carte privée**). Les loups se concertent librement, puis votent en envoyant **seulement un numéro** (ex. `3`).
+  Un message qui n'est pas un numéro seul n'est jamais pris pour un vote ; le dernier vote de chacun compte.
+- Le bot annonce chaque vote dans le groupe, rappelle le temps restant (30 s, 10 s), annonce la victime retenue, puis **referme** le groupe jusqu'à la nuit suivante.
+- Un loup éliminé est **retiré** du groupe. À la fin de la partie, le bot **dissout** le groupe (il retire tous les membres puis le quitte : WhatsApp supprime un groupe vide).
+  Un groupe resté ouvert après un plantage est dissous au redémarrage suivant.
 
 | `WOLF_GROUP` | Comportement |
 |---|---|
-| `keep` (défaut) | le bot reste admin du groupe, **retire les loups morts** et **dissout le groupe à la fin** (il retire tous les membres puis le quitte : WhatsApp supprime un groupe vide). Un groupe resté ouvert après un plantage est dissous au redémarrage suivant. |
-| `leave` | le bot crée le groupe puis **le quitte aussitôt** : il n'a plus accès aux messages. Mais il ne peut plus retirer les morts ni supprimer le groupe : à la fin, il prévient les loups de le quitter. |
-| `off` | pas de groupe : le bot relaie les messages des loups en privé (comme avant). |
+| `keep` (défaut) | comme ci-dessus : vote dans le groupe, ouvert uniquement pendant l'étape des loups, dissous à la fin |
+| `leave` | le bot crée le groupe puis **le quitte aussitôt** : il ne voit plus rien, donc il ne peut pas recevoir leurs votes dans le groupe. Les loups reçoivent alors leur **carte de vote en privé** et le groupe reste ouvert. Le bot ne peut plus le dissoudre : il prévient les loups de le quitter à la fin. |
+| `off` | pas de groupe : cartes de vote privées, et le bot relaie les messages des loups en privé |
 
 - Si un loup ne peut pas être ajouté (réglage « Qui peut m'ajouter à des groupes »), le bot lui envoie un **lien d'invitation** en privé.
-- Si la création du groupe échoue, la partie continue avec le **relais en privé**.
+- Si la création du groupe ou l'envoi de la carte dans le groupe échoue, la partie continue avec les **cartes de vote privées**.
 - WhatsApp n'a pas de bouton « supprimer le groupe » pour un bot : « dissoudre » veut dire vider puis quitter.
-- **Équité :** en mode `keep`, le bot est membre du groupe, donc le **téléphone du bot** voit ses membres (= la liste des loups) et ses messages.
-  Utilise un numéro dédié et ne regarde pas ce téléphone pendant la partie, ou choisis `leave` (le bot quitte aussitôt et efface la conversation de son côté,
-  mais une brève fenêtre d'exposition subsiste à la création).
+- **Équité :** en mode `keep`, le bot est membre du groupe, donc le **téléphone du bot** voit ses membres (= la liste des loups), la carte et leurs messages.
+  Utilise un numéro dédié et ne regarde pas ce téléphone pendant la partie, ou choisis `leave` (mais les votes repassent alors par des cartes privées).
 
 ## Cartes en image avec emojis
 
@@ -105,7 +110,7 @@ Les cartes affichent le nom de **profil** du joueur, pas le nom enregistré dans
 1. `/loup` ouvre le salon (rappels de décompte), `/loup join` pour rejoindre, `/loup go` pour lancer (départ auto sinon).
 2. **Distribution** des cartes avec barre de progression, puis composition annoncée.
 3. **Nuit** (groupe fermé) : 🛡️ Garde → 🔮 Voyante → 🐺 Loups → 🧙‍♀️ Sorcière. Chaque étape est annoncée dans le groupe ;
-   un rôle mort attend un temps aléatoire pour ne rien révéler. Les loups discutent dans leur groupe secret (ou via le relais du bot si le groupe est désactivé).
+   un rôle mort attend un temps aléatoire pour ne rien révéler. Les loups discutent et votent dans leur groupe secret, ouvert seulement pendant leur étape (ou par cartes privées si le groupe est désactivé).
 4. **Jour** (groupe rouvert) : annonce des morts (et de leur rôle), annonce de la voyante bavarde, débat chronométré,
    puis **vote** : la liste des joueurs en vie est envoyée dans le groupe, on vote en **mentionnant (@)** le suspect : un seul @ par message, et répondre à un message ne vote pas.
    Votes publics, fin anticipée quand tout le monde a voté, égalité = personne n'est éliminé.
