@@ -13,7 +13,7 @@
 //  /loup roles      → rôles disponibles et composition selon le nombre de joueurs
 //  /loup regles     → règles du jeu           /loup etat   → où en est la partie
 //  /loup vivants    → joueurs encore en vie   /loup top    → classement des victoires
-//  /loup vote @x    → voter (ou simplement mentionner @x / répondre à son message pendant le vote)
+//  /loup vote @x    → voter (ou simplement mentionner @x pendant le vote : un seul @ par message)
 //  /loup passer     → passer le débat et voter tout de suite (lanceur)
 //  /loup ouvrir     → rouvrir le groupe s’il est resté fermé (hors partie)
 //  /loup aide       → liste des commandes
@@ -215,15 +215,138 @@ const onCooldown = (id, seconds) => {
   return false
 }
 
-// Nom lisible sur les cartes (les emojis et alphabets non latins ne s’affichent pas dans l’image)
-const plainName = (p) => {
-  const s = String(p.name || '')
-    .replace(/[^\p{Script=Latin}\p{N}\s'’.-]/gu, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 22)
-  return s || `Joueur ${String(p.num).slice(-4)}`
+// ───────── Noms des joueurs sur les cartes ─────────
+// Les noms WhatsApp contiennent souvent des emojis, des lettres « fantaisie » (𝓤𝓻𝓼𝓾𝓵𝓮, ＵＲＳＵＬＥ…) ou des symboles.
+// NFKC remet les lettres fantaisie en lettres normales ; les emojis sont dessinés avec des images ;
+// les caractères que la police ne sait pas afficher sont supprimés (pas de carrés vides).
+let NAME_EMOJI = {}
+let METRICS = { upm: 2048, adv: {} }
+const loadNameAssets = () => {
+  try {
+    NAME_EMOJI = JSON.parse(fs.readFileSync(path.join(HERE, 'assets', 'emoji-names.json'), 'utf8'))
+  } catch (e) {
+    console.warn('[loup-garou] emojis des noms indisponibles :', e.message)
+  }
+  try {
+    METRICS = JSON.parse(fs.readFileSync(path.join(HERE, 'assets', 'dejavu-metrics.json'), 'utf8'))
+  } catch (e) {
+    console.warn('[loup-garou] métriques de la police indisponibles :', e.message)
+  }
 }
+const SEGMENTER = typeof Intl?.Segmenter === 'function' ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null
+const EMOJI_RE = /\p{Extended_Pictographic}|\p{Regional_Indicator}/u
+const isSkin = (cp) => cp >= 0x1f3fb && cp <= 0x1f3ff
+
+const emojiKey = (g) => {
+  const cps = [...g].map((c) => c.codePointAt(0)).filter((c) => c !== 0xfe0f)
+  const tries = [cps, cps.filter((c) => !isSkin(c))]
+  const zwj = cps.indexOf(0x200d)
+  if (zwj > 0) tries.push(cps.slice(0, zwj).filter((c) => !isSkin(c)))
+  tries.push(cps.slice(0, 1))
+  for (const t of tries) {
+    const k = t.map((c) => c.toString(16)).join('-')
+    if (NAME_EMOJI[k]) return k
+  }
+  return null
+}
+
+// Découpe un nom en morceaux { type: 'text' | 'emoji', value }
+const nameSegments = (raw) => {
+  const str = String(raw || '').normalize('NFKC')
+  const out = []
+  const push = (type, value) => {
+    const last = out[out.length - 1]
+    if (type === 'text' && last && last.type === 'text') last.value += value
+    else out.push({ type, value })
+  }
+  const parts = SEGMENTER ? [...SEGMENTER.segment(str)].map((x) => x.segment) : [...str]
+  for (const part of parts) {
+    if (EMOJI_RE.test(part)) {
+      const k = emojiKey(part)
+      if (k) push('emoji', k)
+      continue
+    }
+    let t = ''
+    for (const ch of part) {
+      const cp = ch.codePointAt(0)
+      if (cp < 32 || cp === 0xfe0f || cp === 0x200d || cp === 0x200b) continue
+      if (METRICS.adv[cp] !== undefined) t += ch
+    }
+    if (t) push('text', t)
+  }
+  for (const seg of out) if (seg.type === 'text') seg.value = seg.value.replace(/\s+/g, ' ')
+  while (out.length && out[0].type === 'text') {
+    out[0].value = out[0].value.replace(/^\s+/, '')
+    if (out[0].value) break
+    out.shift()
+  }
+  while (out.length && out[out.length - 1].type === 'text') {
+    const last = out[out.length - 1]
+    last.value = last.value.replace(/\s+$/, '')
+    if (last.value) break
+    out.pop()
+  }
+  return out
+}
+
+const EMOJI_W = 1.12 // largeur d’un emoji, en multiples de la taille de police
+const advOf = (ch) => (METRICS.adv[ch.codePointAt(0)] ?? 1200) / METRICS.upm
+const textW = (t, size) => [...t].reduce((a, ch) => a + advOf(ch), 0) * size
+const segsW = (segs, size) => segs.reduce((a, s) => a + (s.type === 'emoji' ? size * EMOJI_W : textW(s.value, size)), 0)
+const last4 = (p) => String(p.num).slice(-4)
+
+// Raccourcit avec « … » pour tenir dans maxW
+const fitSegments = (segs, size, maxW) => {
+  if (segsW(segs, size) <= maxW) return segs
+  const res = segs.map((s) => ({ ...s }))
+  const ell = { type: 'text', value: '…' }
+  while (res.length && segsW([...res, ell], size) > maxW) {
+    const last = res[res.length - 1]
+    const chars = last.type === 'text' ? [...last.value] : []
+    if (chars.length > 1) last.value = chars.slice(0, -1).join('')
+    else res.pop()
+  }
+  res.push(ell)
+  return res
+}
+
+// Segments à afficher pour un joueur (suffixe « ·1234 » si le nom est vide, très court ou en double)
+const displaySegments = (p, duplicate) => {
+  const segs = nameSegments(p.name)
+  const hasText = segs.some((s) => s.type === 'text' && /[\p{L}\p{N}]/u.test(s.value))
+  const hasEmoji = segs.some((s) => s.type === 'emoji')
+  if (!segs.length) return [{ type: 'text', value: `Joueur ${last4(p)}` }]
+  if (!hasText && !hasEmoji) return [...segs, { type: 'text', value: ` ·${last4(p)}` }]
+  if (duplicate) return [...segs, { type: 'text', value: ` ·${last4(p)}` }]
+  return segs
+}
+
+const nameSvg = (segs, x, y, size, fill) => {
+  let cx = x
+  let out = ''
+  for (const s of segs) {
+    if (s.type === 'emoji') {
+      out += `<image href="data:image/png;base64,${NAME_EMOJI[s.value]}" x="${cx.toFixed(1)}" y="${(y - size * 0.85).toFixed(1)}" width="${(size * 1.06).toFixed(1)}" height="${size.toFixed(1)}"/>`
+      cx += size * EMOJI_W
+    } else {
+      out += `<text x="${cx.toFixed(1)}" y="${y}" font-family="${FONT}" font-size="${size}" fill="${fill}" xml:space="preserve">${esc(s.value)}</text>`
+      cx += textW(s.value, size)
+    }
+  }
+  return out
+}
+
+// Nom en texte simple (sans emoji) pour les lignes de texte des cartes ; jamais vide
+const plainName = (p) => {
+  const t = nameSegments(p.name)
+    .filter((s) => s.type === 'text')
+    .map((s) => s.value)
+    .join('')
+    .trim()
+  return /[\p{L}\p{N}]/u.test(t) ? t.slice(0, 22) : `Joueur ${last4(p)}`
+}
+// Nom pour les messages texte (WhatsApp sait afficher les emojis et tous les alphabets)
+const textName = (p) => String(p.name || '').normalize('NFKC').replace(/\s+/g, ' ').trim().slice(0, 30) || `Joueur ${last4(p)}`
 
 const senderOf = (m) => {
   const k = m.key
@@ -352,7 +475,12 @@ const listCard = ({ role, title, subtitle, items, notes = [] }) => {
   const rows = Math.ceil(items.length / cols)
   const rowH = 52
   const top = 215
-  const maxChars = cols === 2 ? 17 : 28
+  const maxW = cols === 2 ? 326 : 740
+  const counts = new Map()
+  for (const p of items) {
+    const k = nameSegments(p.name).map((x) => x.value).join('|').toLowerCase()
+    counts.set(k, (counts.get(k) || 0) + 1)
+  }
   const noteY = top + rows * rowH + 20
   const H = noteY + notes.length * 36 + 50
   const cells = items
@@ -361,9 +489,9 @@ const listCard = ({ role, title, subtitle, items, notes = [] }) => {
       const row = i % rows
       const x = 50 + col * 420
       const y = top + row * rowH + 34
-      const name = plainName(p)
-      const shown = name.length > maxChars ? name.slice(0, maxChars - 1) + '…' : name
-      return txt(x, y, 32, R.color, `${i + 1}.`, { bold: true, anchor: 'start' }) + txt(x + 62, y, 32, '#ffffff', shown, { anchor: 'start' })
+      const dup = counts.get(nameSegments(p.name).map((z) => z.value).join('|').toLowerCase()) > 1
+      const segs = fitSegments(displaySegments(p, dup), 32, maxW)
+      return txt(x, y, 32, R.color, `${i + 1}.`, { bold: true, anchor: 'start' }) + nameSvg(segs, x + 62, y, 32, '#ffffff')
     })
     .join('')
   const noteSvg = notes.map((n, i) => txt(450, noteY + 26 + i * 36, 23, '#aeb6c2', n)).join('')
@@ -528,7 +656,7 @@ const askPick = async (g, player, { role, title, subtitle, items, notes = [], ki
   const R = ROLES[role]
   const fallback =
     `${R.emoji} *${title}*\n${subtitle}\n\n` +
-    list.map((p, i) => `${i + 1}. ${plainName(p)}`).join('\n') +
+    list.map((p, i) => `${i + 1}. ${textName(p)}`).join('\n') +
     (notes.length ? `\n\n${notes.join('\n')}` : '') +
     `\n\nRéponds avec le *numéro*.`
   const r = await sendCard(player, () => listCard({ role, title, subtitle, items: list, notes }), fallback, `${R.emoji} *${title}*`)
@@ -848,7 +976,7 @@ const stepVoyante = (g) =>
           await sendCard(
             seer,
             () => bigCard({ role: t.role, title: R.label, subtitle: `Vision : ${plainName(t)} est…`, lines: ['Le village connaîtra ce rôle', 'mais pas ton nom ni ta cible.'], footer: 'Elle s’efface toute seule' }),
-            `🔮 *Vision* : ${plainName(t)} est ${R.emoji} *${R.label}*`,
+            `🔮 *Vision* : ${textName(t)} est ${R.emoji} *${R.label}*`,
             `🔮 ${R.emoji} *${R.label}*`
           )
           finishStep(g)
@@ -922,7 +1050,7 @@ const stepSorciere = (g) =>
       const r = await sendCard(
         witch,
         () => listCard({ role: 'sorciere', title: 'TES POTIONS', subtitle, items, notes }),
-        `🧙‍♀️ *TES POTIONS*\n${subtitle}\n\nJoueurs pour la potion de mort :\n${items.map((p, i) => `${i + 1}. ${plainName(p)}`).join('\n')}\n\n${notes.join('\n')}`,
+        `🧙‍♀️ *TES POTIONS*\n${subtitle}\n\nJoueurs pour la potion de mort :\n${items.map((p, i) => `${i + 1}. ${textName(p)}`).join('\n')}\n\n${notes.join('\n')}`,
         '🧙‍♀️ *TES POTIONS*'
       )
       if (!r.ok) console.error('[loup-garou] carte de la sorcière non envoyée :', r.error)
@@ -987,11 +1115,13 @@ const dawn = async (g) => {
 }
 
 // ───────── Jour ─────────
-const registerVote = async (g, voter, targetJid) => {
+// `explicit` = vote fait avec la commande « /loup vote @x » (réponse d’erreur utile). Un simple @ dans la discussion
+// qui ne désigne pas un joueur vivant (ou soi-même) est ignoré en silence : ce n’est pas un vote.
+const registerVote = async (g, voter, targetJid, explicit = false) => {
   if (g.phase !== 'vote' || !voter?.alive) return
   const suspect = g.players.find((p) => p.alive && p.ids.has(num(targetJid)))
-  if (!suspect) return say(g.key, `⛔ ${tag(voter.jid)} : ce joueur n’est pas en vie ou ne participe pas.`, [voter.jid])
-  if (suspect === voter) return say(g.key, `⛔ ${tag(voter.jid)} : tu ne peux pas voter contre toi-même !`, [voter.jid])
+  if (!suspect) return explicit ? say(g.key, `⛔ ${tag(voter.jid)} : ce joueur n’est pas en vie ou ne participe pas.`, [voter.jid]) : undefined
+  if (suspect === voter) return explicit ? say(g.key, `⛔ ${tag(voter.jid)} : tu ne peux pas voter contre toi-même !`, [voter.jid]) : undefined
   const changed = g.votes.has(voter)
   g.votes.set(voter, suspect)
   const against = [...g.votes.values()].filter((t) => t === suspect).length
@@ -1027,8 +1157,8 @@ const day = async (g) => {
   await say(
     g.key,
     `🗳️ *VOTE DU VILLAGE*\n\n👥 *Joueurs en vie*\n${voters.map((p, i) => `${i + 1}. ${tag(p.jid)}`).join('\n')}\n\n` +
-      `👉 *Mentionne (@)* le suspect ou *réponds à son message* (ou \`${P}loup vote @joueur\`).\n` +
-      `Votes publics • le dernier vote compte • pas de vote pour soi-même.\n⏱️ *${VOTE_SECONDS} s*`,
+      `👉 Pour voter, *mentionne (@)* le suspect : un seul @ par message.\n` +
+      `Répondre à un message ne compte pas • votes publics • le dernier vote compte • pas de vote pour soi-même.\n⏱️ *${VOTE_SECONDS} s*`,
     jidsOf(voters)
   )
   await waitStep(g, VOTE_SECONDS, {
@@ -1271,7 +1401,7 @@ const resendRole = async (chat, isGroup, me) => {
 
 const COMMAND_WORDS = new Set(['loup', 'loups', 'lg'])
 
-const handleCommand = async (chat, isGroup, me, text, mentioned, quoted) => {
+const handleCommand = async (chat, isGroup, me, text, mentioned) => {
   const [cmdRaw, ...args] = text.slice(P.length).trim().split(/\s+/)
   if (!COMMAND_WORDS.has((cmdRaw || '').toLowerCase())) return
   const word = norm(args[0] || '')
@@ -1328,9 +1458,8 @@ const handleCommand = async (chat, isGroup, me, text, mentioned, quoted) => {
     if (!g || g.phase !== 'vote') return say(chat, 'Le vote n’est possible que pendant la phase de vote.')
     const voter = findPlayer(g, me.ids)
     if (!voter || !voter.alive) return say(chat, 'Seuls les joueurs en vie peuvent voter.')
-    const target = mentioned[0] || quoted
-    if (!target) return say(chat, `Mentionne le suspect : *${P}loup vote @joueur*`)
-    return registerVote(g, voter, target)
+    if (mentioned.length !== 1) return say(chat, `Mentionne un seul suspect : *${P}loup vote @joueur*`)
+    return registerVote(g, voter, mentioned[0], true)
   }
 
   if (word === 'passer' || word === 'skip') {
@@ -1412,14 +1541,14 @@ const handleCommand = async (chat, isGroup, me, text, mentioned, quoted) => {
 }
 
 // ───────── Messages du groupe : votes par mention ou réponse ─────────
-const handleGameText = async (chat, me, mentioned, quoted) => {
+const handleGameText = async (chat, me, mentioned) => {
   const g = games.get(chat)
   if (!g || g.phase !== 'vote') return
   const voter = findPlayer(g, me.ids)
   if (!voter || !voter.alive) return
-  const target = mentioned[0] || quoted
-  if (!target) return
-  return registerVote(g, voter, target)
+  // Seule une @mention vote, et un seul @ par message (répondre à un message ne vote pas : on discute !)
+  if (mentioned.length !== 1) return
+  return registerVote(g, voter, mentioned[0])
 }
 
 // ───────── Réception des messages ─────────
@@ -1444,14 +1573,13 @@ const onMessage = async (m) => {
   }
   const info = c?.extendedTextMessage?.contextInfo
   const mentioned = info?.mentionedJid || []
-  const quoted = info?.participant
 
   if (!isGroup) {
     const isCmd = new RegExp(`^${escRe(P)}\\s*(loup|loups|lg)\\b`, 'i').test(text)
     if (!isCmd && (await handlePrivate(me, text))) return
   }
-  if (text.startsWith(P)) return handleCommand(chat, isGroup, me, text, mentioned, quoted)
-  if (isGroup) return handleGameText(chat, me, mentioned, quoted)
+  if (text.startsWith(P)) return handleCommand(chat, isGroup, me, text, mentioned)
+  if (isGroup) return handleGameText(chat, me, mentioned)
 }
 
 // ───────── Connexion WhatsApp ─────────
@@ -1532,6 +1660,8 @@ const start = async () => {
 
 process.on('unhandledRejection', (e) => console.error('unhandledRejection :', e))
 process.on('uncaughtException', (e) => console.error('uncaughtException :', e))
+
+loadNameAssets()
 
 // Vérifie au démarrage que les cartes peuvent être générées (emojis, polices, sharp)
 if (ROLE_DELIVERY === 'photo') {
