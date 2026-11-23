@@ -79,6 +79,8 @@ const VOYANTE_REVEAL_NAME = (process.env.VOYANTE_REVEAL_NAME || 'false').toLower
 // leave = le bot crée le groupe puis le quitte aussitôt (il ne voit plus rien, mais ne peut plus le dissoudre)
 // off = pas de groupe, les messages des loups sont relayés par le bot en privé
 const WOLF_GROUP = ['keep', 'leave', 'off'].includes((process.env.WOLF_GROUP || 'keep').toLowerCase()) ? (process.env.WOLF_GROUP || 'keep').toLowerCase() : 'keep'
+// Joueurs éliminés dans le groupe principal : delete = le bot supprime leurs messages (il doit être admin) • off = rien
+const DEAD_SILENCE = (process.env.DEAD_SILENCE || 'delete').toLowerCase() === 'off' ? 'off' : 'delete'
 // Révéler le rôle des joueurs morts
 const REVEAL_ROLES = (process.env.REVEAL_ROLES || 'true').toLowerCase() !== 'false'
 
@@ -898,8 +900,40 @@ const hunterShot = async (g, h) => {
   await syncWolfGroup(g)
 }
 
+// Les morts ne parlent plus : le bot supprime leurs messages dans le groupe principal (il doit être admin).
+const DEAD_CMDS = new Set(['role', 'carte', 'roles', 'regles', 'regle', 'rules', 'etat', 'statut', 'vivants', 'liste', 'top', 'aide', 'help'])
+const deadNotice = async (g) => {
+  if (g.deadNoticed || DEAD_SILENCE === 'off') return
+  g.deadNoticed = true
+  await say(g.key, '🤐 *Rappel :* les morts ne parlent plus. Leurs messages seront supprimés, mais ils peuvent continuer à regarder la partie 👀')
+}
+// Retourne true si le message a été supprimé (ou doit être ignoré)
+const silenceDead = async (g, p, m, text) => {
+  if (DEAD_SILENCE === 'off') return false
+  if (text.startsWith(P)) {
+    const [cmdRaw, ...args] = text.slice(P.length).trim().split(/\s+/)
+    if (COMMAND_WORDS.has((cmdRaw || '').toLowerCase()) && DEAD_CMDS.has(norm(args[0] || ''))) return false // commandes de consultation autorisées
+  }
+  try {
+    await sock.sendMessage(g.key, { delete: m.key })
+  } catch (e) {
+    console.warn('[loup-garou] suppression du message d’un mort impossible :', e.message)
+    if (!g.deleteWarned) {
+      g.deleteWarned = true
+      await say(g.key, '⚠️ Je ne peux pas supprimer les messages des morts : je ne suis sans doute pas *admin*. Faites-moi admin, sinon jouez le jeu : 🤫 *les morts ne parlent plus* !')
+    }
+    return true
+  }
+  if (!p.warnedDead) {
+    p.warnedDead = true
+    await say(g.key, `🤫 ${tag(p.jid)}, les morts ne parlent plus ! Ton message a été supprimé. Tu peux continuer à regarder la partie 👀`, [p.jid])
+  }
+  return true
+}
+
 // Après des morts : tir du chasseur s’il est parmi eux. Retourne true si la partie est terminée.
 const resolveDeaths = async (g, dead) => {
+  if (dead.length) await deadNotice(g)
   await syncWolfGroup(g)
   for (const p of dead) {
     if (p.role === 'chasseur') {
@@ -917,14 +951,18 @@ const resolveDeaths = async (g, dead) => {
 
 // ───────── Nuit ─────────
 const runStep = async (g, { role, start, end, seconds = NIGHT_STEP_SECONDS, canAct, setup, after }) => {
-  const actors = g.players.filter((p) => p.role === role && p.alive && (!canAct || canAct(p)))
+  // Rôle absent, ou dont tous les joueurs sont éliminés : plus d’annonce de réveil dans le groupe.
+  // (Avec REVEAL_ROLES=false, on garde une étape « factice » : se taire révélerait le rôle du mort.)
+  const holders = g.players.filter((p) => p.role === role)
+  if (!holders.length || (REVEAL_ROLES && !holders.some((p) => p.alive))) return
+  const actors = holders.filter((p) => p.alive && (!canAct || canAct(p)))
   await say(g.key, start)
   if (!alive(g)) return
   if (actors.length) {
     await setup(actors)
     await waitStep(g, seconds, { min: NIGHT_MIN_STEP })
   } else {
-    // Rôle mort ou sans pouvoir : on attend un temps aléatoire pour ne rien révéler
+    // Joueur sans pouvoir utilisable (ex. sorcière sans potion) ou mort en mode rôles cachés : attente aléatoire
     await waitStep(g, rand(NIGHT_MIN_STEP, seconds))
   }
   g.prompts.clear()
@@ -1559,13 +1597,24 @@ const onMessage = async (m) => {
 
   const c = normalizeMessageContent(m.message)
   const text = String(c?.conversation || c?.extendedTextMessage?.text || c?.imageMessage?.caption || c?.videoMessage?.caption || '').trim()
-  if (!text) return
-  if (m.key.fromMe && sentTexts.includes(text)) return
+  if (m.key.fromMe && text && sentTexts.includes(text)) return
 
   if (wolfGroups.has(chat)) return // groupe secret des loups : aucune commande ni vote ici
+  const isGroup = chat.endsWith('@g.us')
+
+  // Joueur éliminé qui écrit dans le groupe principal (texte, image, vocal, sticker…) : message supprimé
+  if (isGroup && !m.key.fromMe) {
+    const gm = games.get(chat)
+    if (gm && gm.players.some((p) => p.role)) {
+      const who = senderOf(m)
+      const dead = who && gm.players.find((p) => !p.alive && hasId(p, who.ids))
+      if (dead && (await silenceDead(gm, dead, m, text))) return
+    }
+  }
+
+  if (!text) return
   const me = senderOf(m)
   if (!me) return
-  const isGroup = chat.endsWith('@g.us')
   // garde les noms à jour (pour les cartes)
   if (me.name) for (const g of games.values()) {
     const p = findPlayer(g, me.ids)

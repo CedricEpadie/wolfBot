@@ -41,6 +41,19 @@ La nuit, le bot **ferme le groupe** (seuls les admins peuvent écrire) et le **r
 S'il n'est pas admin, il prévient et la partie continue, mais le silence de nuit repose sur le fair-play.
 Si le groupe reste fermé après un plantage : `/loup ouvrir`.
 
+## Les morts ne parlent plus
+
+Un joueur éliminé reste dans le groupe pour regarder la partie, mais le bot **supprime tous ses messages** dans le groupe principal
+(texte, images, vocaux, stickers…). Il prévient le joueur une seule fois et affiche un rappel général à la première mort.
+- Le bot doit être **admin** du groupe pour supprimer les messages des autres (sinon il prévient une fois et la règle repose sur le fair-play).
+- Les commandes de consultation restent autorisées aux morts : `/loup etat`, `/loup vivants`, `/loup role`, `/loup roles`, `/loup regles`, `/loup top`, `/loup aide`.
+- La suppression est quasi immédiate, mais un message peut rester visible une seconde ou deux, et les réactions ne peuvent pas être supprimées.
+- `DEAD_SILENCE=off` désactive ce comportement.
+
+**Annonces de nuit :** quand le joueur d'un rôle est éliminé, le bot **n'annonce plus son réveil** dans le groupe (et la nuit est plus courte).
+Avec `REVEAL_ROLES=false` (rôles des morts cachés), il continue de tout annoncer : se taire révélerait le rôle du mort.
+Un rôle encore en vie mais sans pouvoir utilisable (par exemple une sorcière sans potion) continue d'être annoncé, pour ne rien révéler.
+
 ## Groupe secret des loups
 
 Au début de la partie, le bot **crée un groupe WhatsApp réservé aux loups** (« 🐺 Meute — Loup-Garou ») et y ajoute les loups.
@@ -125,7 +138,7 @@ Toutes les mentions de joueurs sont de vraies mentions WhatsApp (@).
 ## Réglages
 
 Dans `.env` : `PREFIX`, `ROLE_DELIVERY`, `ROLE_SELF_DESTRUCT`, `WIPE_DM_CHAT`, `VOYANTE_REVEAL_NAME`
-(annoncer aussi le nom du joueur sondé), `REVEAL_ROLES` (révéler le rôle des morts), `WOLF_GROUP` (`keep`, `leave` ou `off`), `MIN_PLAYERS`.
+(annoncer aussi le nom du joueur sondé), `REVEAL_ROLES` (révéler le rôle des morts), `DEAD_SILENCE` (supprimer les messages des morts), `WOLF_GROUP` (`keep`, `leave` ou `off`), `MIN_PLAYERS`.
 Les durées (débat, vote, étapes de nuit…) sont en haut de `index.js`.
 
 Le bot Imposteur et ce bot utilisent chacun leur propre commande (`/imposteur …` et `/loup …`) : ils peuvent cohabiter, mais un bot = une session WhatsApp (un numéro).
