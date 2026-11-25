@@ -111,10 +111,31 @@ Les cartes affichent le nom de **profil** du joueur, pas le nom enregistré dans
 2. **Distribution** des cartes avec barre de progression, puis composition annoncée.
 3. **Nuit** (groupe fermé) : 🛡️ Garde → 🔮 Voyante → 🐺 Loups → 🧙‍♀️ Sorcière. Chaque étape est annoncée dans le groupe ;
    un rôle mort attend un temps aléatoire pour ne rien révéler. Les loups discutent et votent dans leur groupe secret, ouvert seulement pendant leur étape (ou par cartes privées si le groupe est désactivé).
-4. **Jour** (groupe rouvert) : annonce des morts (et de leur rôle), annonce de la voyante bavarde, débat chronométré,
+4. **Jour** (groupe rouvert) : annonce dramatique des morts (rôle révélé + épitaphe), annonce de la voyante bavarde, débat chronométré,
    puis **vote** : la liste des joueurs en vie est envoyée dans le groupe, on vote en **mentionnant (@)** le suspect : un seul @ par message, et répondre à un message ne vote pas.
-   Votes publics, fin anticipée quand tout le monde a voté, égalité = personne n'est éliminé.
-5. Le Chasseur tire quand il meurt (30 s). Fin de partie : récap des rôles et classement `/loup top`.
+   Votes publics, fin anticipée quand tout le monde a voté. L'annonce des morts de nuit est volontairement neutre : on ne dit jamais *comment* le joueur est mort.
+5. Le Chasseur tire quand il meurt (30 s). Fin de partie : récap des rôles, statistiques mises à jour, classement `/loup top`.
+
+### Le maire 👑
+Au **jour 1**, avant le débat, le village élit un maire (60 s, on vote en mentionnant le candidat, on peut voter pour soi ; égalité ou aucun vote = tirage au sort).
+- Sa **voix compte double** (affiché dans le décompte).
+- Il **tranche les égalités** du vote : le bot lui envoie en privé la liste des ex æquo (30 s) ; sans réponse, le sort décide. Sans maire, une égalité n'élimine personne.
+- S'il meurt, il **désigne son successeur** en privé (25 s) ; sans réponse, le sort décide.
+- Désactivable avec `MAYOR=false`.
+
+### Statistiques et reprise après plantage 💾
+Les données sont écrites dans `DATA_DIR` (par défaut `./data`, **à placer sur un volume persistant** en hébergement) :
+- `stats.json` : par groupe et par joueur — parties, victoires (loup / village), série en cours et record, survies, mandats de maire, rôles joués. Voir `/loup top` et `/loup stats [@x]`.
+- `games.json` : sauvegarde des parties en cours, écrite au début de chaque nuit et de chaque jour. Après un redémarrage, le bot **reprend la partie** (rôles, morts, potions, maire et groupe des loups conservés) ; la phase en cours recommence depuis son début. Une partie sauvegardée depuis plus de `RESUME_MAX_MINUTES` (120) est abandonnée et le groupe rouvert. Le salon d'attente et la distribution des cartes ne sont pas repris.
+- Ce sont de simples fichiers JSON (écriture atomique, aucune dépendance native). Pour passer à SQLite plus tard, seuls les 3 fichiers de `src/persistence/` sont à adapter.
+
+### Règles, rôles et composition en image 🖼️
+`/loup regles`, `/loup roles` (rôles + tableau de composition) et la composition annoncée au lancement sont envoyées en **images lisibles**.
+`INFO_DELIVERY=text` (ou un problème de génération d'image) les remplace automatiquement par du texte.
+
+### Le narrateur 🎙️
+Toutes les annonces ont plusieurs variantes tirées au hasard (jamais deux fois la même d'affilée) : nuit qui tombe, réveil des rôles, aube, morts de nuit / de vote / du chasseur, vote, maire, victoire… avec une **épitaphe** pour chaque mort
+(propre au rôle si `REVEAL_ROLES=true`, générique sinon). Tout est dans `src/game/narrator.js` : ajouter une phrase = ajouter une ligne dans la liste de l'événement.
 
 Toutes les mentions de joueurs sont de vraies mentions WhatsApp (@).
 
@@ -134,6 +155,7 @@ Toutes les mentions de joueurs sont de vraies mentions WhatsApp (@).
 | `/loup vote @x` | voter (ou simplement mentionner @x pendant le vote) |
 | `/loup passer` | passer le débat (lanceur) |
 | `/loup top` | classement des victoires |
+| `/loup stats [@x]` | statistiques d'un joueur (les siennes par défaut) |
 | `/loup ouvrir` | rouvrir le groupe (hors partie) |
 | `/loup aide` | liste des commandes |
 
@@ -143,10 +165,39 @@ Toutes les mentions de joueurs sont de vraies mentions WhatsApp (@).
 ## Réglages
 
 Dans `.env` : `PREFIX`, `ROLE_DELIVERY`, `ROLE_SELF_DESTRUCT`, `WIPE_DM_CHAT`, `VOYANTE_REVEAL_NAME`
-(annoncer aussi le nom du joueur sondé), `REVEAL_ROLES` (révéler le rôle des morts), `DEAD_SILENCE` (supprimer les messages des morts), `WOLF_GROUP` (`keep`, `leave` ou `off`), `MIN_PLAYERS`.
-Les durées (débat, vote, étapes de nuit…) sont en haut de `index.js`.
+(annoncer aussi le nom du joueur sondé), `REVEAL_ROLES` (révéler le rôle des morts), `DEAD_SILENCE` (supprimer les messages des morts), `WOLF_GROUP` (`keep`, `leave` ou `off`), `MIN_PLAYERS`, `MAYOR` (maire, true/false), `DATA_DIR`, `RESUME_GAMES`, `RESUME_MAX_MINUTES`, `INFO_DELIVERY` (`photo` ou `text`).
+Les durées (débat, vote, étapes de nuit…) sont dans `src/config.js`.
 
 Le bot Imposteur et ce bot utilisent chacun leur propre commande (`/imposteur …` et `/loup …`) : ils peuvent cohabiter, mais un bot = une session WhatsApp (un numéro).
+
+## Structure du code
+
+`index.js` est un simple point d'entrée ; toute la logique est dans `src/` :
+
+```
+src/
+├── main.js            démarrage (vérifie les cartes, lance la connexion)
+├── config.js          variables .env + durées/limites du jeu
+├── env.js, paths.js   chargement du .env, racine du projet
+├── state.js           parties en cours (en mémoire)
+├── persistence/       jsonStore.js • stats.js (data/stats.json) • saves.js (data/games.json)
+├── utils.js           petits utilitaires génériques
+├── whatsapp/          socket.js (socket courant) • connection.js (QR, reconnexion)
+│                      messaging.js (say, sendText, sendCard…) • group.js (admin, verrouillage, dissolution)
+├── cards/             render.js (SVG→JPEG) • names.js (noms/emojis) • assets.js • fonts.js • roleCard.js
+│                      infoCards.js (règles, rôles, composition en image)
+├── game/              roles.js (rôles + composition) • players.js • timers.js • prompts.js
+│                      flow.js (lancement, distribution, boucle) • night.js • day.js • mayor.js • resume.js
+│                      narrator.js (phrases variées + épitaphes)
+│                      deaths.js (morts, chasseur, silence) • lifecycle.js (fin/annulation)
+│                      wolfGroup.js (groupe secret des loups)
+├── handlers/          messages.js (aiguillage) • private.js (réponses aux cartes en privé)
+└── commands/          index.js (registre) • info.js • lobby.js • play.js • admin.js • texts.js
+```
+
+- **Ajouter une commande** : une entrée `{ names, groupOnly, run }` dans `src/commands/*.js`.
+- **Ajouter un rôle** : `src/game/roles.js` (+ image dans `assets/emoji/`), puis une étape dans `src/game/night.js`.
+- **Changer un réglage** : `src/config.js`.
 
 ## Licences
 
