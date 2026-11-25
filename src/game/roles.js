@@ -1,5 +1,6 @@
 // 🎭 Définition des rôles et composition d’une partie
 // → pour ajouter un rôle : l’ajouter dans ROLES + ROLE_ORDER (+ une image assets/emoji/<img>.png), puis dans composition().
+import { NECROMANCER, MENTALIST, NECRO_MIN_PLAYERS, MENTALIST_MIN_PLAYERS } from '../config.js'
 
 export const ROLES = {
   loup: {
@@ -47,6 +48,24 @@ export const ROLES = {
     lines: ['Chaque nuit, protège un joueur des loups.', 'Pas deux nuits de suite le même joueur.', 'Tu peux te protéger toi-même.'],
     short: 'protège un joueur des loups chaque nuit',
   },
+  necromancien: {
+    label: 'NÉCROMANCIEN',
+    emoji: '👻',
+    img: 'necromancien',
+    color: '#b8c2d8',
+    camp: 'Camp : le Village',
+    lines: ['Chaque nuit, tu rejoins le groupe des morts', 'jusqu’à l’aube : interroge-les pour glaner', 'des indices… mais ils peuvent mentir !'],
+    short: 'parle aux morts chaque nuit pour glaner des indices',
+  },
+  mentaliste: {
+    label: 'MENTALISTE',
+    emoji: '🎩',
+    img: 'mentaliste',
+    color: '#ff7ac6',
+    camp: 'Camp : le Village',
+    lines: ['Pendant le vote, tu as des prémonitions :', 'je te dis en privé si le village va dans', 'la bonne direction… ou pas. Reste vague !'],
+    short: 'pressent en privé si le vote du village prend la bonne direction',
+  },
   villageois: {
     label: 'SIMPLE VILLAGEOIS',
     emoji: '🧑‍🌾',
@@ -57,11 +76,13 @@ export const ROLES = {
     short: 'aucun pouvoir, mais sa voix compte',
   },
 }
-export const ROLE_ORDER = ['loup', 'sorciere', 'chasseur', 'voyante', 'garde', 'villageois']
+export const ROLE_ORDER = ['loup', 'sorciere', 'chasseur', 'voyante', 'garde', 'necromancien', 'mentaliste', 'villageois']
 
 export const composition = (n) => {
   const wolves = Math.max(1, Math.floor(n / 3))
   const list = ['sorciere', 'chasseur', 'voyante', 'garde']
+  if (NECROMANCER && n >= NECRO_MIN_PLAYERS) list.push('necromancien')
+  if (MENTALIST && n >= MENTALIST_MIN_PLAYERS) list.push('mentaliste')
   for (let i = 0; i < wolves; i++) list.push('loup')
   while (list.length < n) list.push('villageois')
   return list.slice(0, n)

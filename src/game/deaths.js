@@ -8,6 +8,7 @@ import { ROLES } from './roles.js'
 import { askPick } from './prompts.js'
 import { finishStep, waitStep } from './timers.js'
 import { syncWolfGroup } from './wolfGroup.js'
+import { syncDeadGroup } from './deadGroup.js'
 import { finish, winnerOf } from './lifecycle.js'
 import { tell, epitaph } from './narrator.js'
 import { succeedMayor } from './mayor.js'
@@ -98,6 +99,7 @@ export const resolveDeaths = async (g, dead) => {
     await finish(g, w)
     return true
   }
+  await syncDeadGroup(g) // les nouveaux morts rejoignent le groupe des morts
   await succeedMayor(g) // le maire est mort : il désigne son successeur
   return !alive(g)
 }

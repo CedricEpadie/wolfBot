@@ -1,6 +1,6 @@
 // 🌙 Nuit : étapes Garde → Voyante → Loups → Sorcière, puis aube
 import {
-  NIGHT_STEP_SECONDS, NIGHT_WOLF_SECONDS, NIGHT_MIN_STEP, DM_DELAY_SECONDS,
+  NIGHT_STEP_SECONDS, NIGHT_WOLF_SECONDS, NIGHT_MIN_STEP, NIGHT_NECRO_SECONDS, DM_DELAY_SECONDS,
   REVEAL_ROLES, VOYANTE_REVEAL_NAME, WOLF_GROUP,
 } from '../config.js'
 import { say, sendCard } from '../whatsapp/messaging.js'
@@ -15,6 +15,7 @@ import { finishStep, waitStep } from './timers.js'
 import { notifyWolfVote, setWolfGroupLocked, startWolfGroupVote } from './wolfGroup.js'
 import { deathReport, resolveDeaths } from './deaths.js'
 import { tell } from './narrator.js'
+import { dismissNecro, necroVisit } from './deadGroup.js'
 
 // ───────── Nuit ─────────
 const runStep = async (g, { role, start, end, seconds = NIGHT_STEP_SECONDS, canAct, setup, after, marks, tick }) => {
@@ -179,6 +180,15 @@ const stepSorciere = (g) =>
     },
   })
 
+// Nécromancien : il se réveille en premier, rejoint le groupe des morts PENDANT que les autres rôles jouent,
+// et se rendort à la fin de la nuit. Retourne la visite en cours (ou null si le rôle est absent / éliminé et connu).
+const stepNecro = async (g) => {
+  const holders = g.players.filter((p) => p.role === 'necromancien')
+  if (!holders.length || (REVEAL_ROLES && !holders.some((p) => p.alive))) return null
+  await say(g.key, tell('necro.start'))
+  return necroVisit(g, NIGHT_NECRO_SECONDS).catch((e) => console.error('[loup-garou] visite du nécromancien :', e))
+}
+
 export const night = async (g) => {
   g.nightNo = (g.nightNo || 0) + 1
   g.phase = 'night'
@@ -191,6 +201,8 @@ export const night = async (g) => {
   )
   await sleep(2500)
   if (!alive(g)) return
+  const necro = await stepNecro(g)
+  if (!alive(g)) return
   await stepGarde(g)
   if (!alive(g)) return
   await stepVoyante(g)
@@ -199,11 +211,18 @@ export const night = async (g) => {
   if (!alive(g)) return
   await stepSorciere(g)
   if (!alive(g)) return
+  if (necro) {
+    await necro // la visite dure au moins NIGHT_NECRO_SECONDS : l’aube ne se lève pas avant
+    if (!alive(g)) return
+    await say(g.key, tell('necro.end'))
+    await sleep(1500)
+  }
   await dawn(g)
 }
 
 const dawn = async (g) => {
   g.phase = 'day'
+  await dismissNecro(g) // sécurité : le Nécromancien ne reste jamais dans le groupe des morts de jour
   await lockGroup(g, false)
   const n = g.night
   const dead = []

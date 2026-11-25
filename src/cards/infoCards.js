@@ -1,6 +1,6 @@
 // 🗂️ Cartes d’information PUBLIQUES en image : règles, rôles, composition des parties.
 // (Les cartes privées — rôle, choix de nuit — sont dans render.js / roleCard.js.)
-import { MIN_PLAYERS, MAX_PLAYERS, VOYANTE_REVEAL_NAME, MAYOR, P } from '../config.js'
+import { MIN_PLAYERS, MAX_PLAYERS, VOYANTE_REVEAL_NAME, MAYOR, P, NECROMANCER, MENTALIST, NECRO_MIN_PLAYERS, MENTALIST_MIN_PLAYERS } from '../config.js'
 import { ROLES, ROLE_ORDER, composition, countRoles } from '../game/roles.js'
 import { txt, toJpeg } from './render.js'
 import { W, BODY, MUTED, svgPage, emojiImg, roleImg, wrap, cap } from './kit.js'
@@ -47,7 +47,9 @@ const ruleSections = () => [
       { icon: '🧙‍♀️', text: 'Sorcière : 1 potion de vie, 1 potion de mort, une seule par nuit.' },
       { icon: '🏹', text: 'Chasseur : en mourant, il emporte un joueur avec lui.' },
       { icon: '🔮', text: `Voyante : le rôle qu’elle découvre est annoncé à tous${VOYANTE_REVEAL_NAME ? ', avec le nom du joueur' : ' (sans le nom)'}.` },
-      { icon: '🤐', text: 'Les morts ne parlent plus : leurs messages sont supprimés.' },
+      NECROMANCER && { icon: '👻', text: `Nécromancien (dès ${NECRO_MIN_PLAYERS} joueurs) : la nuit, il rejoint le groupe des morts pour les interroger. Ils peuvent mentir !` },
+      MENTALIST && { icon: '🎩', text: `Mentaliste (dès ${MENTALIST_MIN_PLAYERS} joueurs) : pendant le vote, il reçoit en privé des prémonitions vagues. Le vote est plus long.` },
+      { icon: '🤐', text: 'Les morts ne parlent plus dans le groupe principal : leurs messages sont supprimés.' },
     ],
   },
 ]
@@ -61,7 +63,7 @@ export const rulesCard = () => {
     y += 22
     body += emojiImg(sec.icon, 52, y, 42) + txt(108, y + 33, 31, sec.color, sec.title, { bold: true, anchor: 'start' })
     y += 62
-    for (const it of sec.items) {
+    for (const it of sec.items.filter(Boolean)) {
       const lines = wrap(it.text, 25, maxW)
       body += emojiImg(it.icon, 62, y, 34) + lines.map((l, i) => txt(textX, y + 26 + i * 32, 25, BODY, l, { anchor: 'start' })).join('')
       y += Math.max(34, lines.length * 32) + 16
@@ -97,7 +99,7 @@ export const rolesCard = () => {
 // highlight = nombre de joueurs de la partie en cours (ligne mise en valeur)
 export const compositionCard = ({ highlight = null } = {}) => {
   const rowH = 50
-  const colX = (i) => 300 + i * 94
+  const colX = (i) => 262 + i * 80
   const headY = highlight ? 190 : 160
   const rowsTop = headY + 90
   let body = `${roleImg('loup', 52, 36, 92)}${txt(165, 90, 40, '#f5a524', 'COMPOSITION', { bold: true, anchor: 'start' })}`
@@ -105,7 +107,7 @@ export const compositionCard = ({ highlight = null } = {}) => {
   body += `<line x1="48" y1="${headY - 22}" x2="${W - 48}" y2="${headY - 22}" stroke="#2b323d" stroke-width="3"/>`
   body += txt(60, headY + 46, 22, MUTED, 'Joueurs', { anchor: 'start' })
   ROLE_ORDER.forEach((r, i) => {
-    body += roleImg(r, colX(i) - 28, headY + 8, 56)
+    body += roleImg(r, colX(i) - 25, headY + 8, 50)
   })
   let y = rowsTop
   for (let n = MIN_PLAYERS; n <= MAX_PLAYERS; n++) {
@@ -118,6 +120,8 @@ export const compositionCard = ({ highlight = null } = {}) => {
     })
     y += rowH
   }
-  body += txt(W / 2, y + 36, 22, MUTED, '4 rôles spéciaux + 1 loup tous les 3 joueurs, le reste en villageois')
-  return toJpeg(svgPage(y + 70, '#f5a524', body))
+  body += txt(W / 2, y + 36, 22, MUTED, '1 loup tous les 3 joueurs • 4 rôles spéciaux de base')
+  const extra = [NECROMANCER && `Nécromancien dès ${NECRO_MIN_PLAYERS} joueurs`, MENTALIST && `Mentaliste dès ${MENTALIST_MIN_PLAYERS} joueurs`].filter(Boolean)
+  if (extra.length) body += txt(W / 2, y + 68, 22, MUTED, extra.join(' • '))
+  return toJpeg(svgPage(y + (extra.length ? 104 : 70), '#f5a524', body))
 }

@@ -27,6 +27,7 @@ const serialize = (g, resumeAt) => ({
     wasMayor: !!p.wasMayor,
     death: p.death || null,
   })),
+  deadGroup: g.deadGroup ? { jid: g.deadGroup.jid, added: [...g.deadGroup.added].map((p) => p.num) } : null,
   wolfGroup: g.wolfGroup ? { jid: g.wolfGroup.jid, present: g.wolfGroup.present, removed: [...g.wolfGroup.removed].map((p) => p.num) } : null,
 })
 

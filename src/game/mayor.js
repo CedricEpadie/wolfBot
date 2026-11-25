@@ -20,7 +20,7 @@ export const tally = (g) => {
   return counts
 }
 
-const leaders = (counts) => {
+export const leaders = (counts) => {
   const max = Math.max(...counts.values())
   return [...counts.entries()].filter(([, c]) => c === max).map(([p]) => p)
 }

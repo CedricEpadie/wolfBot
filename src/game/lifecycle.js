@@ -8,6 +8,7 @@ import { stopTimers } from './timers.js'
 import { games } from '../state.js'
 import { ROLES, didWin } from './roles.js'
 import { endWolfGroup } from './wolfGroup.js'
+import { endDeadGroup } from './deadGroup.js'
 import { recordGame, topOf } from '../persistence/stats.js'
 import { recapCard, podiumCard } from '../cards/endCards.js'
 import { clearSave } from '../persistence/saves.js'
@@ -47,11 +48,11 @@ export const finish = async (g, winner) => {
   await sendInfoCard(g.key, () => recapCard(g, winner), fallback, { caption, mentions: jidsOf(g.players) })
 
   // Podium du groupe (classement à jour, « +1 » pour les gagnants de cette partie)
-  const top = topOf(g.key, 10)
+  const top = topOf(g.key, 10, { includeZero: true })
   if (top.length) {
     await sendInfoCard(g.key, () => podiumCard({ entries: top, gained: new Set(winners.map((p) => p.jid)) }), '', { caption: '🏆 *Classement du groupe*' })
   }
-  await endWolfGroup(g)
+  await Promise.all([endWolfGroup(g), endDeadGroup(g)])
 }
 
 export const abort = async (g) => {
@@ -61,5 +62,5 @@ export const abort = async (g) => {
   clearSave(g.key)
   g.finishStep?.()
   if (g.locked) await lockGroup(g, false)
-  await endWolfGroup(g, { quick: true })
+  await Promise.all([endWolfGroup(g, { quick: true }), endDeadGroup(g, { quick: true })])
 }

@@ -1,5 +1,5 @@
 // ☀️ Jour : élection du maire (jour 1), débat, vote public pondéré, dépouillement
-import { P, DAY_SECONDS, VOTE_SECONDS } from '../config.js'
+import { P, DAY_SECONDS } from '../config.js'
 import { say } from '../whatsapp/messaging.js'
 import { num, sleep, tag } from '../utils.js'
 import { alive, jidsOf, listOf, living } from './players.js'
@@ -7,6 +7,13 @@ import { finishStep, waitStep } from './timers.js'
 import { deathReport, resolveDeaths } from './deaths.js'
 import { electMayor, isVotePhase, mayorBreaksTie, tally, voteWeight } from './mayor.js'
 import { tell } from './narrator.js'
+import { mentalistVision, visionMarks, voteSeconds } from './mentalist.js'
+
+// Si le vote ne peut pas encore se clore (voir `hold` dans day()), on prévient : chacun peut encore changer d’avis
+const holdNote = (g) => {
+  const left = Math.ceil(((g.voteHoldUntil || 0) - Date.now()) / 1000)
+  return left > 0 ? `\n⏳ Dépouillement dans ~${left} s : tu peux encore changer ton vote.` : ''
+}
 
 // `explicit` = vote fait avec la commande « /loup vote @x » (réponse d’erreur utile). Un simple @ dans la discussion
 // qui ne désigne pas un joueur vivant (ou soi-même) est ignoré en silence : ce n’est pas un vote.
@@ -31,7 +38,7 @@ export const registerVote = async (g, voter, targetJid, explicit = false) => {
       : `🗳️ ${tag(voter.jid)}${double} vote contre ${tag(suspect.jid)} (${against} voix contre lui)`
   await say(
     g.key,
-    `${head}\n` + (pending.length ? `🕐 Reste à voter : ${listOf(pending)}` : '✅ Tout le monde a voté !'),
+    `${head}\n` + (pending.length ? `🕐 Reste à voter : ${listOf(pending)}` : `✅ Tout le monde a voté !${holdNote(g)}`),
     [voter.jid, suspect.jid, ...jidsOf(pending)]
   )
   if (!pending.length) finishStep(g)
@@ -61,22 +68,31 @@ export const day = async (g) => {
   g.phase = 'vote'
   g.votes = new Map()
   const voters = living(g)
+  const seconds = voteSeconds(g) // un peu plus long si un Mentaliste est dans la partie
+  const visions = visionMarks(seconds)
   await say(
     g.key,
     `🗳️ *VOTE DU VILLAGE*\n${tell('voteStart')}\n\n👥 *Joueurs en vie*\n${voters.map((p, i) => `${i + 1}. ${tag(p.jid)}${p === g.mayor ? ' 👑' : ''}`).join('\n')}\n\n` +
       `👉 Pour voter, *mentionne (@)* le suspect : un seul @ par message.\n` +
       `Répondre à un message ne compte pas • votes publics • le dernier vote compte • pas de vote pour soi-même.\n` +
       (g.mayor?.alive ? `👑 La voix du maire compte *double* et il tranche les égalités.\n` : '') +
-      `⏱️ *${VOTE_SECONDS} s*`,
+      `⏱️ *${seconds} s*`,
     jidsOf(voters)
   )
-  await waitStep(g, VOTE_SECONDS, {
+  // Avec un Mentaliste dans la partie (même mort : la composition est publique), le vote ne peut pas se clore
+  // avant sa première prémonition, même si tout le monde a déjà voté.
+  const hold = g.players.some((p) => p.role === 'mentaliste') ? seconds - visions[0] + 2 : 0
+  g.voteHoldUntil = Date.now() + hold * 1000
+  const visionTimers = hold ? visions.map((m) => setTimeout(() => mentalistVision(g).catch((e) => console.error('[loup-garou] vision :', e)), (seconds - m) * 1000)) : []
+  await waitStep(g, seconds, {
+    min: hold,
     marks: [30, 15, 5],
     tick: (m) => {
       const pending = living(g).filter((p) => !g.votes.has(p))
       return say(g.key, `⏳ *${m} s* — ${g.votes.size}/${voters.length} vote(s).\n🕐 Reste à voter : ${listOf(pending)}`, jidsOf(pending))
     },
   })
+  visionTimers.forEach(clearTimeout)
   if (!alive(g)) return
 
   await say(g.key, tell('voteClosed'))

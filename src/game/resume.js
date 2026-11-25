@@ -28,6 +28,7 @@ const restore = (s) => {
     lastProtected: byNum(s.lastProtected),
     mayor: byNum(s.mayor),
     deadNoticed: s.deadNoticed,
+    deadGroup: s.deadGroup && { jid: s.deadGroup.jid, added: new Set(s.deadGroup.added.map(byNum).filter(Boolean)), necroIn: false },
     wolfGroup: s.wolfGroup && { jid: s.wolfGroup.jid, present: s.wolfGroup.present, removed: new Set(s.wolfGroup.removed.map(byNum).filter(Boolean)) },
   }
 }
@@ -50,6 +51,7 @@ export const resumeGames = async () => {
     const g = restore(s)
     games.set(g.key, g)
     if (g.wolfGroup) wolfGroups.add(g.wolfGroup.jid) // ne pas traiter de commandes dans ce groupe
+    if (g.deadGroup) wolfGroups.add(g.deadGroup.jid)
     console.log(`[loup-garou] reprise de la partie ${g.key} (${s.resumeAt}, nuit ${g.nightNo})`)
     await say(
       g.key,

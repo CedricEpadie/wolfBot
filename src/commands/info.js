@@ -35,8 +35,8 @@ const sendRoles = async ({ chat }) => {
 }
 
 const showTop = async ({ chat }) => {
-  const sorted = topOf(chat, 10)
-  if (!sorted.length) return say(chat, 'Aucune victoire pour l’instant. Lancez une partie ! 🐺')
+  const sorted = topOf(chat, 10, { includeZero: true })
+  if (!sorted.length) return say(chat, 'Aucune partie jouée pour l’instant. Lancez-en une ! 🐺')
   const medals = ['🥇', '🥈', '🥉']
   const text = `🏆 *Classement du Loup-Garou*\n\n${sorted.map((e, i) => `${medals[i] || '▫️'} ${tag(e.jid)} — ${e.wins} victoire(s) / ${e.played} partie(s)`).join('\n')}\n\n📈 *${P}loup stats* : tes statistiques`
   await sendInfoCard(chat, () => podiumCard({ entries: sorted }), text, { caption: '🏆 *Classement du groupe*', mentions: sorted.map((e) => e.jid) })

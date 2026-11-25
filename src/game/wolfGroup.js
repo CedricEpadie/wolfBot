@@ -22,11 +22,11 @@ const writeWolfFile = (list) =>
     for (const jid of list) put.run(jid)
   })
 export const wolfGroups = new Set(readWolfFile()) // jids des groupes de loups connus (pour ne pas y traiter de commandes)
-const trackWolfGroup = (jid) => {
+export const trackWolfGroup = (jid) => {
   wolfGroups.add(jid)
   writeWolfFile([...new Set([...readWolfFile(), jid])])
 }
-const untrackWolfGroup = (jid) => {
+export const untrackWolfGroup = (jid) => {
   wolfGroups.delete(jid)
   writeWolfFile(readWolfFile().filter((x) => x !== jid))
 }
@@ -132,7 +132,7 @@ export const endWolfGroup = async (g, { quick = false } = {}) => {
 // Au démarrage : dissout les groupes de loups restés ouverts après un plantage
 export const cleanupOrphans = async () => {
   for (const jid of readWolfFile()) {
-    if ([...games.values()].some((g) => g.wolfGroup?.jid === jid)) continue
+    if ([...games.values()].some((g) => g.wolfGroup?.jid === jid || g.deadGroup?.jid === jid)) continue
     await dissolveGroup(jid)
     untrackWolfGroup(jid)
   }

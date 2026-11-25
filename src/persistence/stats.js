@@ -63,10 +63,14 @@ export const recordGame = (g, winner) => {
   })
 }
 
-// Classement d’un groupe (les joueurs sans victoire n’y figurent pas)
-export const topOf = (chat, n = 10) =>
+// Classement d’un groupe, trié par victoires puis taux de victoire. Par défaut seuls les joueurs ayant gagné
+// y figurent ; includeZero ajoute ceux qui ont joué sans encore gagner (en bas de liste).
+export const topOf = (chat, n = 10, { includeZero = false } = {}) =>
   getDb()
-    .prepare('SELECT * FROM players WHERE chat = ? AND wins > 0 ORDER BY wins DESC, played ASC LIMIT ?')
+    .prepare(
+      `SELECT * FROM players WHERE chat = ? AND ${includeZero ? 'played > 0' : 'wins > 0'}
+       ORDER BY wins DESC, (wins * 1.0 / MAX(played, 1)) DESC, played ASC LIMIT ?`
+    )
     .all(chat, n)
     .map(toEntry)
 

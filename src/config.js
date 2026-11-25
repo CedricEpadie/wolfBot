@@ -56,3 +56,13 @@ export const RESUME_MAX_MINUTES = Math.max(1, Number(process.env.RESUME_MAX_MINU
 // ───────── Cartes d’information (règles, rôles, composition) ─────────
 // photo : images • text : messages texte
 export const INFO_DELIVERY = (process.env.INFO_DELIVERY || 'photo').toLowerCase() === 'text' ? 'text' : 'photo'
+
+
+// ───────── Nécromancien et Mentaliste ─────────
+// Désactivables si tu ne veux pas ces rôles (NECROMANCER=false : plus de groupe des morts ; MENTALIST=false).
+export const NECROMANCER = (process.env.NECROMANCER || 'true').toLowerCase() !== 'false'
+export const MENTALIST = (process.env.MENTALIST || 'true').toLowerCase() !== 'false'
+export const NECRO_MIN_PLAYERS = 8 // le Nécromancien apparaît à partir de ce nombre de joueurs
+export const MENTALIST_MIN_PLAYERS = 10 // le Mentaliste apparaît à partir de ce nombre de joueurs
+export const NIGHT_NECRO_SECONDS = 90 // durée minimale de la visite du Nécromancien au groupe des morts (la nuit ne finit pas avant)
+export const MENTALIST_EXTRA_SECONDS = 30 // temps de vote supplémentaire quand un Mentaliste est dans la partie

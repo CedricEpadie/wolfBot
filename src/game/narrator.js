@@ -55,6 +55,25 @@ const BANK = {
   ],
   'sorciere.end': ['🧙‍♀️ La Sorcière se rendort.', '🧙‍♀️ Le chaudron refroidit : la Sorcière se rendort.', '🧙‍♀️ Ses fioles rangées, la Sorcière se rendort.'],
 
+  'necro.start': [
+    '👻 *Le Nécromancien se réveille* et descend parler aux morts…',
+    '👻 Une brume glacée monte du cimetière : *le Nécromancien* se réveille et tend l’oreille aux défunts…',
+    '👻 *Le Nécromancien* ouvre les yeux : les morts ont peut-être des choses à dire…',
+    '👻 Les tombes murmurent… *le Nécromancien* se réveille pour les écouter.',
+  ],
+  'necro.end': ['👻 Le Nécromancien se rendort.', '👻 Les morts se taisent : le Nécromancien se rendort.', '👻 À l’approche de l’aube, le Nécromancien quitte le cimetière et se rendort.'],
+
+  // Messages envoyés DANS le groupe des morts
+  'necro.visit': [
+    '🕯️ *Un visiteur est parmi vous.* Le Nécromancien peut vous interroger jusqu’à l’aube. Répondez… ou trompez-le !',
+    '🕯️ Une présence vivante vient de franchir le seuil : *le Nécromancien* écoute. Dites la vérité… ou pas.',
+    '🕯️ *Le Nécromancien est là.* Chacun sait des choses : à vous de décider ce que vous lui confiez.',
+  ],
+  'necro.leave': [
+    '🌅 L’aube approche : le Nécromancien remonte chez les vivants. Silence jusqu’à la prochaine nuit.',
+    '🌅 Le visiteur s’en va avec les premières lueurs. Les morts reprennent leur veille.',
+  ],
+
   // ───── Aube ─────
   dawn: [
     'Le soleil se lève sur le village… 🐓',
@@ -79,6 +98,26 @@ const BANK = {
     'Dans sa boule de cristal, elle a aperçu {what}',
     'Elle ne sait pas tenir sa langue : elle a vu {what}',
     'Les astres lui ont soufflé, et elle le crie sur les toits : {what}',
+  ],
+
+  // ───── Visions du Mentaliste (volontairement vagues : jamais de nom, de chiffre ni de camp) ─────
+  'vision.good': [
+    '🎩 Une onde de calme t’envahit… le village semble sur la bonne voie.',
+    '🎩 Ta prémonition est lumineuse : la foule ne se trompe peut-être pas.',
+    '🎩 Les astres sont alignés : quelque chose te dit que ce vote est juste.',
+    '🎩 Un frisson agréable te parcourt… le destin sourit au village.',
+  ],
+  'vision.bad': [
+    '🎩 Un frisson glacé te parcourt… quelque chose cloche dans ce vote.',
+    '🎩 Ta vision s’assombrit : le village pourrait commettre une erreur.',
+    '🎩 Un mauvais pressentiment te serre la gorge… la foule fait fausse route.',
+    '🎩 Les ombres s’épaississent : ce vote ne te dit rien de bon.',
+  ],
+  'vision.unclear': [
+    '🎩 Les images sont brouillées… rien de net pour l’instant.',
+    '🎩 Le destin hésite, ta prémonition reste floue.',
+    '🎩 Tu as beau te concentrer, la vision refuse de se former…',
+    '🎩 Un voile de brume couvre ta boule de cristal intérieure : trop tôt pour savoir.',
   ],
 
   // ───── Morts (annonces dramatiques) ─────
@@ -243,6 +282,16 @@ const EPITAPHS = {
     'Il veillait sur les autres, personne n’a veillé sur lui.',
     'Son bouclier n’a pas suffi, cette fois.',
     'Le gardien a rendu les armes.',
+  ],
+  necromancien: [
+    'Il parlait aux morts… il les a rejoints pour de bon.',
+    'Cette fois, ce sont les morts qui l’accueillent.',
+    'Il connaissait déjà le chemin.',
+  ],
+  mentaliste: [
+    'Il avait tout pressenti… sauf ça.',
+    'Sa dernière prémonition est restée dans sa tête.',
+    'Le rideau tombe sur le grand numéro.',
   ],
   villageois: [
     'Un simple villageois, un grand courage.',

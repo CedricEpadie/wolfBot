@@ -1,5 +1,5 @@
 // 📖 Textes d’aide : règles, rôles, liste des commandes
-import { P, MIN_PLAYERS, MAX_PLAYERS, VOYANTE_REVEAL_NAME, MAYOR } from '../config.js'
+import { P, MIN_PLAYERS, MAX_PLAYERS, VOYANTE_REVEAL_NAME, MAYOR, NECROMANCER, MENTALIST, NECRO_MIN_PLAYERS, MENTALIST_MIN_PLAYERS } from '../config.js'
 import { ROLES, ROLE_ORDER, compoText } from '../game/roles.js'
 
 export const RULES = () =>
@@ -13,7 +13,9 @@ export const RULES = () =>
   `🧙‍♀️ La Sorcière a 1 potion de vie et 1 potion de mort, une seule potion par nuit.\n` +
   `🏹 Le Chasseur emporte un joueur dans sa mort (nuit ou vote).\n` +
   `🔮 La Voyante est bavarde : le rôle qu’elle découvre est annoncé à tous${VOYANTE_REVEAL_NAME ? ' avec le nom du joueur' : ' (sans le nom du joueur)'}.\n` +
-  `💀 Les morts ne parlent plus : silence jusqu’à la fin ! 🤐\n\n` +
+  (NECROMANCER ? `👻 Le Nécromancien (dès ${NECRO_MIN_PLAYERS} joueurs) rejoint chaque nuit le *groupe des morts*, créé au premier mort, pour les interroger : ils peuvent répondre… ou mentir. Il en est retiré à l’aube.\n` : '') +
+  (MENTALIST ? `🎩 Le Mentaliste (dès ${MENTALIST_MIN_PLAYERS} joueurs) reçoit en privé, pendant le vote, des prémonitions vagues sur la tournure du vote. Le vote dure alors un peu plus longtemps.\n` : '') +
+  `💀 Les morts ne parlent plus dans le groupe principal : silence jusqu’à la fin ! 🤐\n\n` +
   `👥 ${MIN_PLAYERS} à ${MAX_PLAYERS} joueurs • *${P}loup roles* pour la composition.`
 
 export const ROLES_TEXT = () => {

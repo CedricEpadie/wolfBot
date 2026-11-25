@@ -11,6 +11,8 @@ Bot autonome (Baileys), lancé en arrière-plan avec **pm2** via **yarn**. Préf
 | 🏹 Chasseur | à sa mort (nuit ou vote), il tire une dernière balle |
 | 🔮 Voyante bavarde | découvre un rôle chaque nuit… et **le village l'apprend** (sans son nom) |
 | 🛡️ Garde | protège un joueur chaque nuit (pas deux fois de suite le même) |
+| 👻 Nécromancien *(dès 8 joueurs)* | rejoint chaque nuit le groupe des morts pour les interroger |
+| 🎩 Mentaliste *(dès 10 joueurs)* | reçoit en privé des prémonitions vagues pendant le vote |
 | 🧑‍🌾 Simple villageois | aucun pouvoir, sa voix compte |
 
 Composition automatique (6 à 16 joueurs) : 4 rôles spéciaux + 1 loup tous les 3 joueurs, le reste en villageois
@@ -109,7 +111,7 @@ Les cartes affichent le nom de **profil** du joueur, pas le nom enregistré dans
 
 1. `/loup` ouvre le salon (rappels de décompte), `/loup join` pour rejoindre, `/loup go` pour lancer (départ auto sinon).
 2. **Distribution** des cartes avec barre de progression, puis composition annoncée.
-3. **Nuit** (groupe fermé) : 🛡️ Garde → 🔮 Voyante → 🐺 Loups → 🧙‍♀️ Sorcière. Chaque étape est annoncée dans le groupe ;
+3. **Nuit** (groupe fermé) : 👻 Nécromancien (en parallèle) → 🛡️ Garde → 🔮 Voyante → 🐺 Loups → 🧙‍♀️ Sorcière. Chaque étape est annoncée dans le groupe ;
    un rôle mort attend un temps aléatoire pour ne rien révéler. Les loups discutent et votent dans leur groupe secret, ouvert seulement pendant leur étape (ou par cartes privées si le groupe est désactivé).
 4. **Jour** (groupe rouvert) : annonce dramatique des morts (rôle révélé + épitaphe), annonce de la voyante bavarde, débat chronométré,
    puis **vote** : la liste des joueurs en vie est envoyée dans le groupe, on vote en **mentionnant (@)** le suspect : un seul @ par message, et répondre à un message ne vote pas.
@@ -122,6 +124,19 @@ Au **jour 1**, avant le débat, le village élit un maire (60 s, on vote en ment
 - Il **tranche les égalités** du vote : le bot lui envoie en privé la liste des ex æquo (30 s) ; sans réponse, le sort décide. Sans maire, une égalité n'élimine personne.
 - S'il meurt, il **désigne son successeur** en privé (25 s) ; sans réponse, le sort décide.
 - Désactivable avec `MAYOR=false`.
+
+### Le Nécromancien 👻 et le groupe des morts
+- Le **groupe des morts** est un groupe WhatsApp créé par le bot **au premier mort** (seulement si la partie compte un Nécromancien). Chaque mort y est ajouté dès son élimination et y reste : ils peuvent discuter librement, les vivants ne les lisent pas. Si on ne peut pas ajouter un joueur (confidentialité), il reçoit un lien d'invitation en privé.
+- **Chaque nuit**, le Nécromancien est ajouté au groupe, **pendant que les autres rôles jouent**, pour au moins `NIGHT_NECRO_SECONDS` (90 s) : l'aube ne se lève pas avant. Il pose ses questions ; les morts répondent… ou mentent. **À l'aube il est retiré** : il n'est jamais dans le groupe de jour.
+- Nuit 1 (personne n'est encore mort) : il en est prévenu en privé. S'il meurt, il devient un mort comme les autres et reste dans le groupe.
+- Le groupe est dissous en fin de partie ; après un plantage, il est retrouvé (reprise) ou nettoyé (partie perdue).
+- ⚠️ Comme dans tout groupe WhatsApp, les membres voient le numéro de celui qui est ajouté : les morts savent donc qui est le Nécromancien (ils sont hors jeu, mais pourraient le répéter en privé).
+- Désactivable avec `NECROMANCER=false`.
+
+### Le Mentaliste 🎩
+- Pendant le vote du village, il reçoit **deux prémonitions privées** (à mi-vote, puis vers la fin), volontairement vagues : *ça se passe bien* (le suspect en tête, voix double du maire comprise, est un loup), *quelque chose cloche* (c'est un innocent) ou *rien de net* (trop peu de votes, ou égalité). Jamais de nom, de chiffre ni de camp.
+- Le vote dure `MENTALIST_EXTRA_SECONDS` (30 s) de plus dès qu'un Mentaliste est dans la partie (même mort, pour ne pas trahir son état), et ne peut pas se clore avant sa première prémonition : si tout le monde a déjà voté, le bot l'indique et chacun peut encore changer d'avis.
+- Désactivable avec `MENTALIST=false`.
 
 ### Statistiques et reprise après plantage 💾
 Les données sont écrites dans `DATA_DIR` (par défaut `./data`, **à placer sur un volume persistant** en hébergement) :
@@ -137,8 +152,8 @@ Les données sont écrites dans `DATA_DIR` (par défaut `./data`, **à placer su
 
 ### Fin de partie en images 🏁
 À la fin d'une partie, le bot envoie deux images dans le même style que les cartes :
-- **Récap des rôles** : bandeau coloré selon le camp vainqueur, puis une ligne par joueur (rôle, survivant ou cause et moment de la mort : dévoré, empoisonné, éliminé par le vote, abattu par le chasseur), avec 👑 pour le maire et 🏆 pour les vainqueurs. Les homonymes sont distingués par les 4 derniers chiffres de leur numéro.
-- **Podium du groupe** : les 3 premiers sur un podium, les suivants en liste (jusqu'à 10), et un « +1 » pour ceux qui viennent de gagner. La même image est envoyée par `/loup top`.
+- **Récap des rôles** : bandeau coloré selon le camp vainqueur, puis une ligne par joueur (rôle, survivant ou cause et moment de la mort : dévoré, empoisonné, éliminé par le vote, abattu par le chasseur), avec 👑 pour le maire et 🏆 pour les vainqueurs. Au-delà de 10 joueurs, le récap passe **sur deux colonnes** (≈ 1000 px de haut à 16 joueurs). Les homonymes sont distingués par les 4 derniers chiffres de leur numéro.
+- **Podium du groupe** : les 3 premiers *vainqueurs* sur un podium, puis la liste jusqu'à 10 joueurs, **y compris ceux qui n'ont pas encore gagné** (ils n'apparaissent jamais sur le podium), et un « +1 » pour ceux qui viennent de gagner. La même image est envoyée par `/loup top`.
 
 Les cartes sont dans `src/cards/endCards.js` (briques de dessin communes dans `kit.js`). Sans image possible, le récap est envoyé en texte comme avant.
 
@@ -174,7 +189,7 @@ Toutes les mentions de joueurs sont de vraies mentions WhatsApp (@).
 ## Réglages
 
 Dans `.env` : `PREFIX`, `ROLE_DELIVERY`, `ROLE_SELF_DESTRUCT`, `WIPE_DM_CHAT`, `VOYANTE_REVEAL_NAME`
-(annoncer aussi le nom du joueur sondé), `REVEAL_ROLES` (révéler le rôle des morts), `DEAD_SILENCE` (supprimer les messages des morts), `WOLF_GROUP` (`keep`, `leave` ou `off`), `MIN_PLAYERS`, `MAYOR` (maire, true/false), `DATA_DIR`, `RESUME_GAMES`, `RESUME_MAX_MINUTES`, `INFO_DELIVERY` (`photo` ou `text`).
+(annoncer aussi le nom du joueur sondé), `REVEAL_ROLES` (révéler le rôle des morts), `DEAD_SILENCE` (supprimer les messages des morts), `WOLF_GROUP` (`keep`, `leave` ou `off`), `MIN_PLAYERS`, `MAYOR`, `NECROMANCER`, `MENTALIST` (true/false), `DATA_DIR`, `RESUME_GAMES`, `RESUME_MAX_MINUTES`, `INFO_DELIVERY` (`photo` ou `text`).
 Les durées (débat, vote, étapes de nuit…) sont dans `src/config.js`.
 
 Le bot Imposteur et ce bot utilisent chacun leur propre commande (`/imposteur …` et `/loup …`) : ils peuvent cohabiter, mais un bot = une session WhatsApp (un numéro).
@@ -197,6 +212,7 @@ src/
 │                      infoCards.js (règles, rôles, composition) • endCards.js (récap des rôles, podium) • kit.js
 ├── game/              roles.js (rôles + composition) • players.js • timers.js • prompts.js
 │                      flow.js (lancement, distribution, boucle) • night.js • day.js • mayor.js • resume.js
+│                      deadGroup.js (groupe des morts, Nécromancien) • mentalist.js (prémonitions, durée du vote)
 │                      narrator.js (phrases variées + épitaphes)
 │                      deaths.js (morts, chasseur, silence) • lifecycle.js (fin/annulation)
 │                      wolfGroup.js (groupe secret des loups)
