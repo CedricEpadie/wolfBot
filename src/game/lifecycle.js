@@ -30,7 +30,7 @@ export const finish = async (g, winner) => {
   clearSave(g.key)
   if (g.locked) await lockGroup(g, false)
 
-  recordGame(g, winner) // statistiques persistantes (data/stats.json)
+  recordGame(g, winner) // statistiques persistantes (base SQLite)
 
   const recap = g.players
     .map((p) => `${ROLES[p.role].emoji} ${tag(p.jid)} — ${ROLES[p.role].label}${p.alive ? '' : ' 💀'}${p.wasMayor ? ' 👑' : ''}`)

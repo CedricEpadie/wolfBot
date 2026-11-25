@@ -1,11 +1,7 @@
-// 💾 Sauvegarde des parties en cours (data/games.json) pour les reprendre après un redémarrage.
+// 💾 Sauvegarde des parties en cours (table saved_games) pour les reprendre après un redémarrage.
 // On sauvegarde à des points sûrs (début de nuit, début de jour) : la reprise recommence la phase depuis son début.
-import path from 'node:path'
-import { DATA_DIR, RESUME_GAMES } from '../config.js'
-import { readJson, writeJson } from './jsonStore.js'
-
-const FILE = path.join(DATA_DIR, 'games.json')
-const read = () => readJson(FILE, {})
+import { RESUME_GAMES } from '../config.js'
+import { getDb } from './db.js'
 
 // Convertit une partie en données JSON (les Map/Set/objets joueurs deviennent des numéros)
 const serialize = (g, resumeAt) => ({
@@ -35,16 +31,16 @@ const serialize = (g, resumeAt) => ({
 
 export const saveGame = (g, resumeAt) => {
   if (!RESUME_GAMES) return
-  const db = read()
-  db[g.key] = serialize(g, resumeAt)
-  writeJson(FILE, db)
+  const s = serialize(g, resumeAt)
+  getDb().prepare('INSERT OR REPLACE INTO saved_games (key, resume_at, saved_at, data) VALUES (?, ?, ?, ?)').run(s.key, s.resumeAt, s.savedAt, JSON.stringify(s))
 }
 
 export const clearSave = (key) => {
-  const db = read()
-  if (!(key in db)) return
-  delete db[key]
-  writeJson(FILE, db)
+  getDb().prepare('DELETE FROM saved_games WHERE key = ?').run(key)
 }
 
-export const loadSaves = () => Object.values(read())
+export const loadSaves = () =>
+  getDb()
+    .prepare('SELECT data FROM saved_games')
+    .all()
+    .map((r) => JSON.parse(r.data))

@@ -125,9 +125,11 @@ Au **jour 1**, avant le débat, le village élit un maire (60 s, on vote en ment
 
 ### Statistiques et reprise après plantage 💾
 Les données sont écrites dans `DATA_DIR` (par défaut `./data`, **à placer sur un volume persistant** en hébergement) :
-- `stats.json` : par groupe et par joueur — parties, victoires (loup / village), série en cours et record, survies, mandats de maire, rôles joués. Voir `/loup top` et `/loup stats [@x]`.
-- `games.json` : sauvegarde des parties en cours, écrite au début de chaque nuit et de chaque jour. Après un redémarrage, le bot **reprend la partie** (rôles, morts, potions, maire et groupe des loups conservés) ; la phase en cours recommence depuis son début. Une partie sauvegardée depuis plus de `RESUME_MAX_MINUTES` (120) est abandonnée et le groupe rouvert. Le salon d'attente et la distribution des cartes ne sont pas repris.
-- Ce sont de simples fichiers JSON (écriture atomique, aucune dépendance native). Pour passer à SQLite plus tard, seuls les 3 fichiers de `src/persistence/` sont à adapter.
+- `wolfbot.db` (SQLite) — table `players` : par groupe et par joueur — parties, victoires (loup / village), série en cours et record, survies, mandats de maire, rôles joués. Voir `/loup top` et `/loup stats [@x]`.
+- table `saved_games` : sauvegarde des parties en cours, écrite au début de chaque nuit et de chaque jour. Après un redémarrage, le bot **reprend la partie** (rôles, morts, potions, maire et groupe des loups conservés) ; la phase en cours recommence depuis son début. Une partie sauvegardée depuis plus de `RESUME_MAX_MINUTES` (120) est abandonnée et le groupe rouvert. Le salon d'attente et la distribution des cartes ne sont pas repris.
+- Les tables `game_history` (une ligne par partie terminée) et `wolf_groups` (groupes de loups à nettoyer après un plantage) complètent la base. Le schéma évolue via la liste `MIGRATIONS` de `src/persistence/db.js`.
+- Utilise le module `node:sqlite` intégré à Node : **Node ≥ 22.13 requis**, aucune dépendance native. Les anciens fichiers `stats.json` / `games.json` / `wolf-groups.json` (v2) sont importés automatiquement au premier lancement, puis renommés en `.imported`.
+- Sauvegarde conseillée : copier `data/wolfbot.db` (ou utiliser `sqlite3 wolfbot.db .backup`).
 
 ### Règles, rôles et composition en image 🖼️
 `/loup regles`, `/loup roles` (rôles + tableau de composition) et la composition annoncée au lancement sont envoyées en **images lisibles**.
@@ -180,7 +182,7 @@ src/
 ├── config.js          variables .env + durées/limites du jeu
 ├── env.js, paths.js   chargement du .env, racine du projet
 ├── state.js           parties en cours (en mémoire)
-├── persistence/       jsonStore.js • stats.js (data/stats.json) • saves.js (data/games.json)
+├── persistence/       db.js (SQLite + migrations) • stats.js • saves.js
 ├── utils.js           petits utilitaires génériques
 ├── whatsapp/          socket.js (socket courant) • connection.js (QR, reconnexion)
 │                      messaging.js (say, sendText, sendCard…) • group.js (admin, verrouillage, dissolution)

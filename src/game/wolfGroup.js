@@ -1,6 +1,5 @@
 // 🐺 Groupe secret des loups : création, vote, retrait des morts, dissolution
-import path from 'node:path'
-import { DATA_DIR, WOLF_GROUP, ROLE_DELIVERY, NIGHT_WOLF_SECONDS, SELF_DESTRUCT } from '../config.js'
+import { WOLF_GROUP, ROLE_DELIVERY, NIGHT_WOLF_SECONDS, SELF_DESTRUCT } from '../config.js'
 import { sock } from '../whatsapp/socket.js'
 import { say, sendText, wipeChat } from '../whatsapp/messaging.js'
 import { dissolveGroup } from '../whatsapp/group.js'
@@ -10,12 +9,18 @@ import { textName } from '../cards/names.js'
 import { listCard } from '../cards/render.js'
 import { games } from '../state.js'
 import { finishStep } from './timers.js'
-import { readJson, writeJson } from '../persistence/jsonStore.js'
+import { getDb, transaction } from '../persistence/db.js'
 
 // ───────── Groupe secret des loups ─────────
-const WOLF_FILE = path.join(DATA_DIR, 'wolf-groups.json')
-const readWolfFile = () => readJson(WOLF_FILE, [])
-const writeWolfFile = (list) => writeJson(WOLF_FILE, list)
+// Les groupes de loups créés par le bot sont mémorisés en base (table wolf_groups) : après un plantage,
+// ceux qui n’appartiennent à aucune partie reprise sont dissous au redémarrage.
+const readWolfFile = () => getDb().prepare('SELECT jid FROM wolf_groups').all().map((r) => r.jid)
+const writeWolfFile = (list) =>
+  transaction((d) => {
+    d.exec('DELETE FROM wolf_groups')
+    const put = d.prepare('INSERT OR IGNORE INTO wolf_groups (jid) VALUES (?)')
+    for (const jid of list) put.run(jid)
+  })
 export const wolfGroups = new Set(readWolfFile()) // jids des groupes de loups connus (pour ne pas y traiter de commandes)
 const trackWolfGroup = (jid) => {
   wolfGroups.add(jid)

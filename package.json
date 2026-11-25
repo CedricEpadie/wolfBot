@@ -14,7 +14,7 @@
     "status": "pm2 status"
   },
   "engines": {
-    "node": ">=20.12"
+    "node": ">=22.13"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "latest",
