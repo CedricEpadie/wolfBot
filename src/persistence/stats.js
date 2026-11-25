@@ -1,5 +1,6 @@
 // 📈 Statistiques par joueur et par groupe, conservées dans SQLite (tables players, player_ids, game_history)
 import { getDb, transaction } from './db.js'
+import { didWin } from '../game/roles.js'
 
 const toEntry = (r) => ({
   jid: r.jid,
@@ -39,7 +40,7 @@ export const recordGame = (g, winner) => {
       const old = getRow.get(g.key, num)
       const roles = old ? JSON.parse(old.roles) : {}
       roles[p.role] = (roles[p.role] || 0) + 1
-      const won = winner === 'village' ? p.role !== 'loup' : winner === 'loups' ? p.role === 'loup' : false
+      const won = didWin(p.role, winner)
       const streak = won ? (old?.streak || 0) + 1 : 0
       upsert.run({
         chat: g.key,

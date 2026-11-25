@@ -75,7 +75,7 @@ export const listCard = ({ role, title, subtitle, items, notes = [] }) => {
 </svg>`)
 }
 
-const nameSvg = (segs, x, y, size, fill) => {
+export const nameSvg = (segs, x, y, size, fill) => {
   let cx = x
   let out = ''
   for (const s of segs) {

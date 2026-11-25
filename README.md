@@ -135,6 +135,13 @@ Les données sont écrites dans `DATA_DIR` (par défaut `./data`, **à placer su
 `/loup regles`, `/loup roles` (rôles + tableau de composition) et la composition annoncée au lancement sont envoyées en **images lisibles**.
 `INFO_DELIVERY=text` (ou un problème de génération d'image) les remplace automatiquement par du texte.
 
+### Fin de partie en images 🏁
+À la fin d'une partie, le bot envoie deux images dans le même style que les cartes :
+- **Récap des rôles** : bandeau coloré selon le camp vainqueur, puis une ligne par joueur (rôle, survivant ou cause et moment de la mort : dévoré, empoisonné, éliminé par le vote, abattu par le chasseur), avec 👑 pour le maire et 🏆 pour les vainqueurs. Les homonymes sont distingués par les 4 derniers chiffres de leur numéro.
+- **Podium du groupe** : les 3 premiers sur un podium, les suivants en liste (jusqu'à 10), et un « +1 » pour ceux qui viennent de gagner. La même image est envoyée par `/loup top`.
+
+Les cartes sont dans `src/cards/endCards.js` (briques de dessin communes dans `kit.js`). Sans image possible, le récap est envoyé en texte comme avant.
+
 ### Le narrateur 🎙️
 Toutes les annonces ont plusieurs variantes tirées au hasard (jamais deux fois la même d'affilée) : nuit qui tombe, réveil des rôles, aube, morts de nuit / de vote / du chasseur, vote, maire, victoire… avec une **épitaphe** pour chaque mort
 (propre au rôle si `REVEAL_ROLES=true`, générique sinon). Tout est dans `src/game/narrator.js` : ajouter une phrase = ajouter une ligne dans la liste de l'événement.
@@ -187,7 +194,7 @@ src/
 ├── whatsapp/          socket.js (socket courant) • connection.js (QR, reconnexion)
 │                      messaging.js (say, sendText, sendCard…) • group.js (admin, verrouillage, dissolution)
 ├── cards/             render.js (SVG→JPEG) • names.js (noms/emojis) • assets.js • fonts.js • roleCard.js
-│                      infoCards.js (règles, rôles, composition en image)
+│                      infoCards.js (règles, rôles, composition) • endCards.js (récap des rôles, podium) • kit.js
 ├── game/              roles.js (rôles + composition) • players.js • timers.js • prompts.js
 │                      flow.js (lancement, distribution, boucle) • night.js • day.js • mayor.js • resume.js
 │                      narrator.js (phrases variées + épitaphes)

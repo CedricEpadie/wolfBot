@@ -43,6 +43,7 @@ const hunterShot = async (g, h) => {
   if (!alive(g)) return
   if (chosen) {
     chosen.alive = false
+    chosen.death = { kind: 'hunter', no: g.nightNo }
     await say(g.key, deathReport(chosen, 'hunter', { hunter: tag(h.jid) }), [h.jid, chosen.jid])
   } else {
     await say(g.key, tell('hunterMiss', { player: tag(h.jid) }), [h.jid])

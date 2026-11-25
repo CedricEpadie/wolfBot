@@ -207,8 +207,14 @@ const dawn = async (g) => {
   await lockGroup(g, false)
   const n = g.night
   const dead = []
-  if (n.wolfTarget && !n.saved && n.protected !== n.wolfTarget) dead.push(n.wolfTarget)
-  if (n.poisoned && !dead.includes(n.poisoned)) dead.push(n.poisoned)
+  if (n.wolfTarget && !n.saved && n.protected !== n.wolfTarget) {
+    dead.push(n.wolfTarget)
+    n.wolfTarget.death = { kind: 'wolves', no: g.nightNo } // mémorisé pour le récap de fin de partie
+  }
+  if (n.poisoned && !dead.includes(n.poisoned)) {
+    dead.push(n.poisoned)
+    n.poisoned.death = { kind: 'poison', no: g.nightNo }
+  }
 
   await say(g.key, `☀️ *JOUR ${g.nightNo}*\n\n${tell('dawn')}\n${g.locked === false ? '🔓 Le groupe est rouvert.' : ''}`)
   await sleep(2500)

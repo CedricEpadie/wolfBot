@@ -76,3 +76,6 @@ export const compoText = (n) =>
     .filter((x) => x.k)
     .map((x) => `${x.k} ${ROLES[x.r].emoji} ${ROLES[x.r].label}`)
     .join(' • ')
+
+// Ce joueur a-t-il gagné ? winner : 'village' | 'loups' | 'egalite' (égalité : personne ne gagne)
+export const didWin = (role, winner) => (winner === 'village' ? role !== 'loup' : winner === 'loups' ? role === 'loup' : false)

@@ -1,14 +1,15 @@
 // 🏁 Fin de partie : victoire, statistiques, annulation
 import { P } from '../config.js'
-import { say } from '../whatsapp/messaging.js'
+import { sendInfoCard } from '../whatsapp/messaging.js'
 import { lockGroup } from '../whatsapp/group.js'
 import { tag } from '../utils.js'
-import { alive, jidsOf, living } from './players.js'
+import { alive, jidsOf, listOf, living } from './players.js'
 import { stopTimers } from './timers.js'
 import { games } from '../state.js'
-import { ROLES } from './roles.js'
+import { ROLES, didWin } from './roles.js'
 import { endWolfGroup } from './wolfGroup.js'
-import { recordGame } from '../persistence/stats.js'
+import { recordGame, topOf } from '../persistence/stats.js'
+import { recapCard, podiumCard } from '../cards/endCards.js'
 import { clearSave } from '../persistence/saves.js'
 import { tell } from './narrator.js'
 
@@ -32,15 +33,24 @@ export const finish = async (g, winner) => {
 
   recordGame(g, winner) // statistiques persistantes (base SQLite)
 
+  const winners = g.players.filter((p) => didWin(p.role, winner))
+  const title = tell(winner === 'village' ? 'winVillage' : winner === 'loups' ? 'winWolves' : 'winDraw')
+  const outro = `🏆 *${P}loup top* : classement • 📈 *${P}loup stats* : tes statistiques • Rejouer : *${P}loup*`
+
+  // Texte de repli (INFO_DELIVERY=text ou image impossible) : le récap des rôles en liste
   const recap = g.players
     .map((p) => `${ROLES[p.role].emoji} ${tag(p.jid)} — ${ROLES[p.role].label}${p.alive ? '' : ' 💀'}${p.wasMayor ? ' 👑' : ''}`)
     .join('\n')
-  const title = tell(winner === 'village' ? 'winVillage' : winner === 'loups' ? 'winWolves' : 'winDraw')
-  await say(
-    g.key,
-    `🏁 *FIN DE PARTIE*\n\n${title}\n\n🎭 *Les rôles*\n${recap}\n\n🏆 *${P}loup top* : classement • 📈 *${P}loup stats* : tes statistiques • Rejouer : *${P}loup*`,
-    jidsOf(g.players)
-  )
+  const fallback = `🏁 *FIN DE PARTIE*\n\n${title}\n\n🎭 *Les rôles*\n${recap}\n\n${outro}`
+  const caption = `🏁 *FIN DE PARTIE*\n\n${title}\n\n${winners.length ? `🏆 Vainqueur(s) : ${listOf(winners)}` : '💀 Aucun vainqueur'}\n\n${outro}`
+
+  await sendInfoCard(g.key, () => recapCard(g, winner), fallback, { caption, mentions: jidsOf(g.players) })
+
+  // Podium du groupe (classement à jour, « +1 » pour les gagnants de cette partie)
+  const top = topOf(g.key, 10)
+  if (top.length) {
+    await sendInfoCard(g.key, () => podiumCard({ entries: top, gained: new Set(winners.map((p) => p.jid)) }), '', { caption: '🏆 *Classement du groupe*' })
+  }
   await endWolfGroup(g)
 }
 

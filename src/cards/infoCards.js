@@ -2,43 +2,9 @@
 // (Les cartes privées — rôle, choix de nuit — sont dans render.js / roleCard.js.)
 import { MIN_PLAYERS, MAX_PLAYERS, VOYANTE_REVEAL_NAME, MAYOR, P } from '../config.js'
 import { ROLES, ROLE_ORDER, composition, countRoles } from '../game/roles.js'
-import { EMOJI, NAME_EMOJI } from './assets.js'
-import { emojiKey, textW } from './names.js'
 import { txt, toJpeg } from './render.js'
+import { W, BODY, MUTED, svgPage, emojiImg, roleImg, wrap, cap } from './kit.js'
 
-const W = 900
-const BODY = '#d7dce3'
-const MUTED = '#9aa4b2'
-
-const svgPage = (H, color, body) => `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-  <rect width="${W}" height="${H}" rx="36" fill="#14181f"/>
-  <rect x="22" y="22" width="${W - 44}" height="${H - 44}" rx="28" fill="none" stroke="${color}" stroke-width="5"/>
-  ${body}
-</svg>`
-
-// Emoji dessiné avec les images embarquées (assets/emoji-names.json) ; rien si l’emoji est inconnu
-const emojiImg = (char, x, y, size) => {
-  const k = emojiKey(char)
-  return k && NAME_EMOJI[k] ? `<image href="data:image/png;base64,${NAME_EMOJI[k]}" x="${x}" y="${y}" width="${size}" height="${size}"/>` : ''
-}
-const roleImg = (role, x, y, w) => `<image href="${EMOJI[role]}" x="${x}" y="${y}" width="${w}" height="${(w * 207) / 220}"/>`
-
-// Découpe un texte en lignes qui tiennent dans maxW
-const wrap = (text, size, maxW) => {
-  const lines = []
-  let cur = ''
-  for (const word of text.split(' ')) {
-    const test = cur ? `${cur} ${word}` : word
-    if (!cur || textW(test, size) <= maxW) cur = test
-    else {
-      lines.push(cur)
-      cur = word
-    }
-  }
-  if (cur) lines.push(cur)
-  return lines
-}
-const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1)
 
 // ───────── Règles ─────────
 const ruleSections = () => [

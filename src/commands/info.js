@@ -5,6 +5,7 @@ import { num, onCooldown, tag } from '../utils.js'
 import { games } from '../state.js'
 import { statsOf, topOf } from '../persistence/stats.js'
 import { rulesCard, rolesCard, compositionCard } from '../cards/infoCards.js'
+import { podiumCard } from '../cards/endCards.js'
 import { ROLES } from '../game/roles.js'
 import { findPlayer, jidsOf, listOf, living } from '../game/players.js'
 import { roleCardFor } from '../cards/roleCard.js'
@@ -33,15 +34,12 @@ const sendRoles = async ({ chat }) => {
   if (ok) await sendInfoCard(chat, () => compositionCard(), '', { caption: '📊 *Composition selon le nombre de joueurs*' })
 }
 
-const showTop = ({ chat }) => {
+const showTop = async ({ chat }) => {
   const sorted = topOf(chat, 10)
   if (!sorted.length) return say(chat, 'Aucune victoire pour l’instant. Lancez une partie ! 🐺')
   const medals = ['🥇', '🥈', '🥉']
-  return say(
-    chat,
-    `🏆 *Classement du Loup-Garou*\n\n${sorted.map((e, i) => `${medals[i] || '▫️'} ${tag(e.jid)} — ${e.wins} victoire(s) / ${e.played} partie(s)`).join('\n')}\n\n📈 *${P}loup stats* : tes statistiques`,
-    sorted.map((e) => e.jid)
-  )
+  const text = `🏆 *Classement du Loup-Garou*\n\n${sorted.map((e, i) => `${medals[i] || '▫️'} ${tag(e.jid)} — ${e.wins} victoire(s) / ${e.played} partie(s)`).join('\n')}\n\n📈 *${P}loup stats* : tes statistiques`
+  await sendInfoCard(chat, () => podiumCard({ entries: sorted }), text, { caption: '🏆 *Classement du groupe*', mentions: sorted.map((e) => e.jid) })
 }
 
 // Statistiques d’un joueur : le sien, ou celui qu’on mentionne (« /loup stats @x »)

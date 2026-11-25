@@ -106,6 +106,7 @@ export const day = async (g) => {
     }
   }
   victim.alive = false
+  victim.death = { kind: 'vote', no: g.nightNo }
   await say(g.key, `⚖️ *Le village a tranché !*\n${deathReport(victim, 'vote')}`, [victim.jid])
   await sleep(2000)
   if (!alive(g)) return
