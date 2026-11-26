@@ -19,7 +19,7 @@ export const ROLES = {
     color: '#b57cff',
     camp: 'Camp : le Village',
     lines: ['Tu possèdes 2 potions à usage unique :', 'VIE = sauve la victime des loups,', 'MORT = élimine le joueur de ton choix.'],
-    short: 'une potion de vie et une potion de mort, à usage unique',
+    short: 'une potion de vie et une potion de mort, à usage unique (une seule potion par nuit)',
   },
   chasseur: {
     label: 'CHASSEUR',
@@ -46,7 +46,7 @@ export const ROLES = {
     color: '#3ddc84',
     camp: 'Camp : le Village',
     lines: ['Chaque nuit, protège un joueur des loups.', 'Pas deux nuits de suite le même joueur.', 'Tu peux te protéger toi-même.'],
-    short: 'protège un joueur des loups chaque nuit',
+    short: 'protège un joueur des loups chaque nuit (jamais le même deux nuits de suite)',
   },
   necromancien: {
     label: 'NÉCROMANCIEN',

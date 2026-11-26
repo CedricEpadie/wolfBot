@@ -24,7 +24,7 @@ export const REVEAL_ROLES = (process.env.REVEAL_ROLES || 'true').toLowerCase() !
 
 // ───────── Réglages du jeu ─────────
 export const MIN_PLAYERS = Math.max(6, Number(process.env.MIN_PLAYERS) || 6) // 6 minimum pour que tous les rôles existent
-export const MAX_PLAYERS = 16
+export const MAX_PLAYERS = 20
 export const LOBBY_SECONDS = 120 // temps pour rejoindre avant le lancement automatique
 export const READ_SECONDS = 25 // lecture de sa carte avant la première nuit
 export const NIGHT_STEP_SECONDS = 40 // temps accordé au Garde, à la Voyante, à la Sorcière

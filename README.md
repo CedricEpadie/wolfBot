@@ -15,7 +15,7 @@ Bot autonome (Baileys), lancé en arrière-plan avec **pm2** via **yarn**. Préf
 | 🎩 Mentaliste *(dès 10 joueurs)* | reçoit en privé des prémonitions vagues pendant le vote |
 | 🧑‍🌾 Simple villageois | aucun pouvoir, sa voix compte |
 
-Composition automatique (6 à 16 joueurs) : 4 rôles spéciaux + 1 loup tous les 3 joueurs, le reste en villageois
+Composition automatique (**6 à 20 joueurs**, `MAX_PLAYERS` dans `src/config.js`) : 4 rôles spéciaux + 1 loup tous les 3 joueurs (Nécromancien dès 8, Mentaliste dès 10), le reste en villageois. À 20 joueurs : 6 loups, 6 rôles spéciaux, 8 villageois. La distribution des cartes en privé est étalée (`DM_DELAY_SECONDS` entre deux envois) : compter ~1 min 20 pour 20 joueurs.
 (6 joueurs : 2 loups ; 9 joueurs : 3 loups ; 12 joueurs : 4 loups…). Voir `/loup roles`.
 
 ## Installation
@@ -150,10 +150,14 @@ Les données sont écrites dans `DATA_DIR` (par défaut `./data`, **à placer su
 `/loup regles`, `/loup roles` (rôles + tableau de composition) et la composition annoncée au lancement sont envoyées en **images lisibles**.
 `INFO_DELIVERY=text` (ou un problème de génération d'image) les remplace automatiquement par du texte.
 
+### Design des cartes 🎨
+Toutes les cartes partagent un même design system (`src/cards/kit.js`) : fond dégradé, halo de la couleur du rôle, cadre lumineux à double filet, pastilles (camp), badges numérotés, encadrés de consignes. Règle de lisibilité : sur un téléphone une image de 900 px s'affiche à ~40 % de sa taille, donc **aucun texte sous 22 px**, corps à 26-33 px, titres à 40 px et plus. Les textes trop longs sont réduits ou coupés automatiquement (jamais de débordement), et les listes de choix passent sur deux colonnes dès 8 joueurs.
+Fichiers : `draw.js` (SVG→JPEG, texte, noms avec emojis) • `kit.js` (design system) • `render.js` (cartes privées) • `infoCards.js` • `endCards.js`.
+
 ### Fin de partie en images 🏁
 À la fin d'une partie, le bot envoie deux images dans le même style que les cartes :
-- **Récap des rôles** : bandeau coloré selon le camp vainqueur, puis une ligne par joueur (rôle, survivant ou cause et moment de la mort : dévoré, empoisonné, éliminé par le vote, abattu par le chasseur), avec 👑 pour le maire et 🏆 pour les vainqueurs. Au-delà de 10 joueurs, le récap passe **sur deux colonnes** (≈ 1000 px de haut à 16 joueurs). Les homonymes sont distingués par les 4 derniers chiffres de leur numéro.
-- **Podium du groupe** : les 3 premiers *vainqueurs* sur un podium, puis la liste jusqu'à 10 joueurs, **y compris ceux qui n'ont pas encore gagné** (ils n'apparaissent jamais sur le podium), et un « +1 » pour ceux qui viennent de gagner. La même image est envoyée par `/loup top`.
+- **Récap des rôles** : bandeau coloré selon le camp vainqueur, puis une ligne par joueur (rôle, survivant ou cause et moment de la mort : dévoré, empoisonné, éliminé par le vote, abattu par le chasseur), avec 👑 pour le maire et 🏆 pour les vainqueurs. Au-delà de 10 joueurs, le récap passe **sur deux colonnes** (≈ 1400 px de haut à 20 joueurs). Les homonymes sont distingués par les 4 derniers chiffres de leur numéro.
+- **Podium du groupe** : les 3 premiers *vainqueurs* sur un podium, puis la liste (jusqu'à 20 joueurs), **y compris ceux qui n'ont pas encore gagné** (ils n'apparaissent jamais sur le podium), et un « +1 » pour ceux qui viennent de gagner. La même image est envoyée par `/loup top`.
 
 Les cartes sont dans `src/cards/endCards.js` (briques de dessin communes dans `kit.js`). Sans image possible, le récap est envoyé en texte comme avant.
 
@@ -209,7 +213,8 @@ src/
 ├── whatsapp/          socket.js (socket courant) • connection.js (QR, reconnexion)
 │                      messaging.js (say, sendText, sendCard…) • group.js (admin, verrouillage, dissolution)
 ├── cards/             render.js (SVG→JPEG) • names.js (noms/emojis) • assets.js • fonts.js • roleCard.js
-│                      infoCards.js (règles, rôles, composition) • endCards.js (récap des rôles, podium) • kit.js
+│                      draw.js (dessin bas niveau) • kit.js (design system) • render.js (cartes privées)
+│                      infoCards.js (règles, rôles, composition) • endCards.js (récap des rôles, podium)
 ├── game/              roles.js (rôles + composition) • players.js • timers.js • prompts.js
 │                      flow.js (lancement, distribution, boucle) • night.js • day.js • mayor.js • resume.js
 │                      deadGroup.js (groupe des morts, Nécromancien) • mentalist.js (prémonitions, durée du vote)

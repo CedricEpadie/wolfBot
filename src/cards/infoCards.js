@@ -1,17 +1,18 @@
 // 🗂️ Cartes d’information PUBLIQUES en image : règles, rôles, composition des parties.
-// (Les cartes privées — rôle, choix de nuit — sont dans render.js / roleCard.js.)
+// (Cartes privées : render.js • cartes de fin de partie : endCards.js • design system : kit.js)
 import { MIN_PLAYERS, MAX_PLAYERS, VOYANTE_REVEAL_NAME, MAYOR, P, NECROMANCER, MENTALIST, NECRO_MIN_PLAYERS, MENTALIST_MIN_PLAYERS } from '../config.js'
 import { ROLES, ROLE_ORDER, composition, countRoles } from '../game/roles.js'
-import { txt, toJpeg } from './render.js'
-import { W, BODY, MUTED, svgPage, emojiImg, roleImg, wrap, cap } from './kit.js'
+import { txt, toJpeg } from './draw.js'
+import { W, BODY, MUTED, GOLD, svgPage, emojiImg, roleImg, wrap, cap, fitSize, pill, panel, divider, header } from './kit.js'
 
+const headerIcon = roleImg('loup', 48, 36, 108)
 
 // ───────── Règles ─────────
 const ruleSections = () => [
   {
     icon: '🎯',
     title: 'Objectif',
-    color: '#f5a524',
+    color: GOLD,
     items: [
       { icon: '🏡', text: 'Village : démasquer et éliminer tous les loups-garous.' },
       { icon: '🐺', text: 'Loups-Garous : devenir aussi nombreux que les autres joueurs.' },
@@ -22,8 +23,9 @@ const ruleSections = () => [
     title: 'La nuit — le groupe est fermé',
     color: '#b57cff',
     items: [
-      { icon: '⏰', text: 'Réveils dans l’ordre : Garde → Voyante → Loups → Sorcière.' },
+      { icon: '⏰', text: `Les rôles se réveillent un à un${NECROMANCER ? ' (le Nécromancien en premier)' : ''}, puis le Garde, la Voyante, les Loups et la Sorcière.` },
       { icon: '📩', text: 'Chaque pouvoir s’utilise en privé : réponds par le numéro affiché sur ta carte.' },
+      { icon: '🔮', text: `La Voyante est bavarde : le rôle qu’elle découvre est annoncé à tous${VOYANTE_REVEAL_NAME ? ', avec le nom du joueur' : ' (sans le nom)'}.` },
     ],
   },
   {
@@ -39,89 +41,95 @@ const ruleSections = () => [
     ],
   },
   {
-    icon: '✨',
-    title: 'Les pouvoirs',
-    color: '#3ddc84',
+    icon: '👻',
+    title: 'Les morts',
+    color: '#9fb0cc',
     items: [
-      { icon: '🛡️', text: 'Garde : protège un joueur, jamais le même deux nuits de suite.' },
-      { icon: '🧙‍♀️', text: 'Sorcière : 1 potion de vie, 1 potion de mort, une seule par nuit.' },
-      { icon: '🏹', text: 'Chasseur : en mourant, il emporte un joueur avec lui.' },
-      { icon: '🔮', text: `Voyante : le rôle qu’elle découvre est annoncé à tous${VOYANTE_REVEAL_NAME ? ', avec le nom du joueur' : ' (sans le nom)'}.` },
-      NECROMANCER && { icon: '👻', text: `Nécromancien (dès ${NECRO_MIN_PLAYERS} joueurs) : la nuit, il rejoint le groupe des morts pour les interroger. Ils peuvent mentir !` },
-      MENTALIST && { icon: '🎩', text: `Mentaliste (dès ${MENTALIST_MIN_PLAYERS} joueurs) : pendant le vote, il reçoit en privé des prémonitions vagues. Le vote est plus long.` },
       { icon: '🤐', text: 'Les morts ne parlent plus dans le groupe principal : leurs messages sont supprimés.' },
+      NECROMANCER && { icon: '👻', text: 'Ils se retrouvent dans un groupe des morts, où le Nécromancien vient les interroger la nuit. Ils peuvent mentir !' },
     ],
   },
 ]
 
 export const rulesCard = () => {
-  const textX = 112
-  const maxW = W - textX - 56
-  let y = 150
-  let body = `${roleImg('loup', 52, 36, 92)}${txt(165, 100, 42, '#f5a524', 'RÈGLES DU LOUP-GAROU', { bold: true, anchor: 'start' })}<line x1="48" y1="140" x2="${W - 48}" y2="140" stroke="#2b323d" stroke-width="3"/>`
+  const textX = 122
+  const maxW = W - textX - 60
+  let y = 212
+  let body = header({ icon: headerIcon, title: 'RÈGLES DU LOUP-GAROU', subtitle: `${MIN_PLAYERS} à ${MAX_PLAYERS} joueurs`, color: GOLD })
   for (const sec of ruleSections()) {
-    y += 22
-    body += emojiImg(sec.icon, 52, y, 42) + txt(108, y + 33, 31, sec.color, sec.title, { bold: true, anchor: 'start' })
-    y += 62
+    body += panel(48, y, W - 96, 62, { fill: sec.color, opacity: 0.16, stroke: sec.color, rx: 16 })
+    body += emojiImg(sec.icon, 66, y + 10, 42) + txt(124, y + 42, 31, sec.color, sec.title, { bold: true, anchor: 'start' })
+    y += 62 + 22
     for (const it of sec.items.filter(Boolean)) {
-      const lines = wrap(it.text, 25, maxW)
-      body += emojiImg(it.icon, 62, y, 34) + lines.map((l, i) => txt(textX, y + 26 + i * 32, 25, BODY, l, { anchor: 'start' })).join('')
-      y += Math.max(34, lines.length * 32) + 16
+      const lines = wrap(it.text, 27, maxW)
+      body += emojiImg(it.icon, 68, y - 2, 38) + lines.map((l, i) => txt(textX, y + 28 + i * 36, 27, BODY, l, { anchor: 'start' })).join('')
+      y += Math.max(40, lines.length * 36) + 18
     }
+    y += 12
   }
-  y += 16
-  body += `<line x1="48" y1="${y}" x2="${W - 48}" y2="${y}" stroke="#2b323d" stroke-width="3"/>`
-  body += txt(W / 2, y + 42, 23, MUTED, `${MIN_PLAYERS} à ${MAX_PLAYERS} joueurs • ${P}loup roles : rôles et composition`)
-  return toJpeg(svgPage(y + 80, '#f5a524', body))
+  body += divider(y)
+  body += txt(W / 2, y + 48, 25, MUTED, `${P}loup roles : les rôles et leurs pouvoirs`)
+  return toJpeg(svgPage(y + 108, GOLD, body))
 }
 
 // ───────── Rôles ─────────
 export const rolesCard = () => {
-  const rowH = 158
-  const top = 150
-  let body = `${roleImg('loup', 52, 36, 92)}${txt(165, 100, 42, '#f5a524', 'LES RÔLES', { bold: true, anchor: 'start' })}<line x1="48" y1="140" x2="${W - 48}" y2="140" stroke="#2b323d" stroke-width="3"/>`
+  const textX = 200
+  const maxW = W - textX - 60
+  let y = 212
+  let body = header({ icon: headerIcon, title: 'LES RÔLES', subtitle: 'Pouvoirs et camps', color: GOLD })
   ROLE_ORDER.forEach((r, i) => {
     const R = ROLES[r]
-    const y = top + i * rowH
-    const lines = wrap(cap(R.short), 24, W - 190 - 90)
-    body += roleImg(r, 56, y + 16, 100)
-    body += txt(190, y + 44, 32, R.color, R.label, { bold: true, anchor: 'start' })
-    body += txt(190, y + 74, 20, MUTED, R.camp.replace('Camp : ', 'Camp • '), { anchor: 'start' })
-    body += lines.map((l, k) => txt(190, y + 106 + k * 28, 24, BODY, l, { anchor: 'start' })).join('')
-    if (i < ROLE_ORDER.length - 1) body += `<line x1="70" y1="${y + rowH - 4}" x2="${W - 70}" y2="${y + rowH - 4}" stroke="#222a35" stroke-width="2"/>`
+    const lines = wrap(cap(R.short), 26, maxW)
+    const rowH = 84 + lines.length * 34 + 22
+    const labelSize = fitSize(R.label, 34, 400, { bold: true })
+    const campText = R.camp.includes('Loups') ? 'Loups-Garous' : 'Village'
+    const campColor = campText === 'Village' ? '#7fb2ff' : '#ff6b6b'
+    const pillW = pill(0, 0, campText, campColor, { size: 22, anchor: 'start' }).w
+    body += roleImg(r, 56, y + 6, 112)
+    body += txt(textX, y + 40, labelSize, R.color, R.label, { bold: true, anchor: 'start' })
+    body += pill(W - 60 - pillW, y + 30, campText, campColor, { size: 22, anchor: 'start' }).svg
+    body += lines.map((l, k) => txt(textX, y + 84 + k * 34, 26, BODY, l, { anchor: 'start' })).join('')
+    y += rowH
+    if (i < ROLE_ORDER.length - 1) body += divider(y - 6, { x1: 70, x2: W - 70 })
   })
-  const H = top + ROLE_ORDER.length * rowH + 40
-  body += txt(W / 2, H - 22, 22, MUTED, `${MIN_PLAYERS} à ${MAX_PLAYERS} joueurs • ${P}loup regles : les règles`)
-  return toJpeg(svgPage(H + 20, '#f5a524', body))
+  body += txt(W / 2, y + 36, 25, MUTED, `${P}loup regles : les règles du jeu`)
+  return toJpeg(svgPage(y + 96, GOLD, body))
 }
 
 // ───────── Composition ─────────
 // highlight = nombre de joueurs de la partie en cours (ligne mise en valeur)
 export const compositionCard = ({ highlight = null } = {}) => {
-  const rowH = 50
-  const colX = (i) => 262 + i * 80
-  const headY = highlight ? 190 : 160
-  const rowsTop = headY + 90
-  let body = `${roleImg('loup', 52, 36, 92)}${txt(165, 90, 40, '#f5a524', 'COMPOSITION', { bold: true, anchor: 'start' })}`
-  body += txt(165, 126, 23, highlight ? '#ffd27a' : MUTED, highlight ? `Cette partie : ${highlight} joueurs` : 'Les rôles selon le nombre de joueurs', { anchor: 'start' })
-  body += `<line x1="48" y1="${headY - 22}" x2="${W - 48}" y2="${headY - 22}" stroke="#2b323d" stroke-width="3"/>`
-  body += txt(60, headY + 46, 22, MUTED, 'Joueurs', { anchor: 'start' })
-  ROLE_ORDER.forEach((r, i) => {
-    body += roleImg(r, colX(i) - 25, headY + 8, 50)
+  const rowH = 54
+  const colX = (i) => 270 + i * 80
+  const headY = 206
+  const rowsTop = headY + 102
+  let body = header({
+    icon: headerIcon,
+    title: 'COMPOSITION',
+    subtitle: highlight ? `Cette partie : ${highlight} joueurs` : 'Les rôles selon le nombre de joueurs',
+    color: GOLD,
   })
+  body += txt(64, headY + 52, 24, MUTED, 'Joueurs', { anchor: 'start' })
+  ROLE_ORDER.forEach((r, i) => {
+    body += roleImg(r, colX(i) - 27, headY + 10, 54)
+  })
+  body += divider(headY + 82)
   let y = rowsTop
   for (let n = MIN_PLAYERS; n <= MAX_PLAYERS; n++) {
     const counts = countRoles(composition(n))
-    if (n === highlight) body += `<rect x="40" y="${y - 6}" width="${W - 80}" height="${rowH - 4}" rx="14" fill="#262e3b" stroke="#f5a524" stroke-width="3"/>`
-    body += txt(60, y + 30, 28, n === highlight ? '#ffd27a' : '#ffffff', `${n}`, { bold: true, anchor: 'start' })
+    if (n === highlight) body += panel(40, y - 8, W - 80, rowH - 4, { fill: GOLD, opacity: 0.16, stroke: GOLD, rx: 14 })
+    else if (n % 2) body += panel(40, y - 8, W - 80, rowH - 4, { opacity: 0.035, rx: 12 })
+    body += txt(70, y + 30, 31, n === highlight ? '#ffd27a' : '#ffffff', `${n}`, { bold: true, anchor: 'start' })
     ROLE_ORDER.forEach((r, i) => {
       const k = counts[r] || 0
-      body += txt(colX(i), y + 31, 28, k ? ROLES[r].color : '#4a5360', k ? `${k}` : '–', { bold: !!k })
+      body += txt(colX(i), y + 31, 31, k ? ROLES[r].color : '#4a5568', k ? `${k}` : '–', { bold: !!k })
     })
     y += rowH
   }
-  body += txt(W / 2, y + 36, 22, MUTED, '1 loup tous les 3 joueurs • 4 rôles spéciaux de base')
   const extra = [NECROMANCER && `Nécromancien dès ${NECRO_MIN_PLAYERS} joueurs`, MENTALIST && `Mentaliste dès ${MENTALIST_MIN_PLAYERS} joueurs`].filter(Boolean)
-  if (extra.length) body += txt(W / 2, y + 68, 22, MUTED, extra.join(' • '))
-  return toJpeg(svgPage(y + (extra.length ? 104 : 70), '#f5a524', body))
+  body += divider(y + 6)
+  body += txt(W / 2, y + 48, 25, MUTED, '1 loup tous les 3 joueurs • 4 rôles spéciaux de base')
+  if (extra.length) body += txt(W / 2, y + 84, 25, MUTED, extra.join(' • '))
+  return toJpeg(svgPage(y + (extra.length ? 144 : 108), GOLD, body))
 }

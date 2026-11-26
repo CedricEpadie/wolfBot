@@ -1,91 +1,70 @@
-// 🎴 Génération des cartes en image (SVG → JPEG via sharp)
-import './fonts.js' // doit rester le premier import : configure les polices avant sharp
-import { esc } from '../utils.js'
+// 🎴 Cartes PRIVÉES en image : carte de rôle et carte de choix numérotés (actions de nuit, tir du chasseur…)
+import { SELF_DESTRUCT } from '../config.js'
 import { ROLES } from '../game/roles.js'
-import { EMOJI, NAME_EMOJI } from './assets.js'
-import { nameSegments, displaySegments, fitSegments, textW, EMOJI_W } from './names.js'
+import { nameSegments, displaySegments, fitSegments } from './names.js'
+import { txt, toJpeg, nameSvg } from './draw.js'
+import { BODY, MUTED, svgPage, roleImg, wrap, fitSize, badge, panel, divider, pill } from './kit.js'
 
-let sharp = null
-try {
-  sharp = (await import('sharp')).default
-} catch (e) {
-  console.warn('[loup-garou] sharp indisponible :', e.message)
-}
-
-const FONT = 'DejaVu Sans, Arial, Helvetica, sans-serif'
-export const txt = (x, y, size, fill, content, { bold = false, anchor = 'middle' } = {}) =>
-  `<text x="${x}" y="${y}" text-anchor="${anchor}" font-family="${FONT}" font-size="${size}"${bold ? ' font-weight="bold"' : ''} fill="${fill}">${esc(content)}</text>`
-export const toJpeg = (svg) => {
-  if (!sharp) throw new Error('le module « sharp » n’est pas installé')
-  return sharp(Buffer.from(svg)).jpeg({ quality: 92 }).toBuffer()
-}
-
-// Carte « grande » : emoji du rôle, titre, sous-titre, lignes de texte
+// Carte « grande » : illustration du rôle, titre, camp, 3 lignes d’explication
 export const bigCard = ({ role, title, subtitle, lines = [], footer }) => {
   const R = ROLES[role]
-  const body = lines.map((l, i) => txt(450, 400 + i * 40, 27, '#d7dce3', l)).join('')
-  const titleSize = Math.max(34, Math.min(58, Math.floor(800 / (title.length * 0.68))))
-  return toJpeg(`<svg xmlns="http://www.w3.org/2000/svg" width="900" height="620" viewBox="0 0 900 620">
-  <rect width="900" height="620" rx="36" fill="#14181f"/>
-  <rect x="22" y="22" width="856" height="576" rx="28" fill="none" stroke="${R.color}" stroke-width="5"/>
-  <image href="${EMOJI[role]}" x="340" y="44" width="220" height="207"/>
-  ${txt(450, 305, titleSize, R.color, title, { bold: true })}
-  ${txt(450, 352, 27, '#9aa4b2', subtitle)}
-  ${body}
-  ${txt(450, 575, 22, '#7d8794', footer || 'Ne montre cette carte à personne • elle s’efface toute seule')}
-</svg>`)
+  const H = 736
+  const titleSize = fitSize(title, 68, 780, { bold: true, min: 38 })
+  const body =
+    `<defs><radialGradient id="aura" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="${R.color}" stop-opacity="0.4"/><stop offset="1" stop-color="${R.color}" stop-opacity="0"/></radialGradient></defs>` +
+    `<circle cx="450" cy="160" r="200" fill="url(#aura)"/>` +
+    roleImg(role, 330, 38, 240) +
+    txt(450, 356, titleSize, R.color, title, { bold: true }) +
+    pill(450, 408, subtitle, R.color, { size: 26 }).svg +
+    divider(468, { x1: 300, x2: 600 }) +
+    lines.map((l, i) => txt(450, 520 + i * 46, fitSize(l, 31, 780), BODY, l)).join('') +
+    divider(662) +
+    txt(450, 706, 24, MUTED, footer || (SELF_DESTRUCT ? 'Carte secrète • elle s’efface toute seule' : 'Carte secrète • ne la montre à personne'))
+  return toJpeg(svgPage(H, R.color, body))
 }
 
-// Carte « liste » : choix numérotés (action de nuit, tir du chasseur…)
+// Carte « liste » : choix numérotés + encadré de consignes
 export const listCard = ({ role, title, subtitle, items, notes = [] }) => {
   const R = ROLES[role]
-  const cols = items.length > 8 ? 2 : 1
+  const cols = items.length > 7 ? 2 : 1
   const rows = Math.ceil(items.length / cols)
-  const rowH = 52
-  const top = 215
-  const maxW = cols === 2 ? 326 : 740
+  const rowH = 64
+  const colW = cols === 2 ? 394 : 804
+  const subLines = wrap(subtitle || '', 26, 640).slice(0, 2)
+  const headerBottom = 178 + (subLines.length > 1 ? 32 : 0)
+  const top = headerBottom + 26
+
+  // Les noms identiques sont distingués par les 4 derniers chiffres du numéro
+  const key = (p) => nameSegments(p.name).map((x) => x.value).join('|').toLowerCase()
   const counts = new Map()
-  for (const p of items) {
-    const k = nameSegments(p.name).map((x) => x.value).join('|').toLowerCase()
-    counts.set(k, (counts.get(k) || 0) + 1)
-  }
-  const noteY = top + rows * rowH + 20
-  const H = noteY + notes.length * 36 + 50
+  for (const p of items) counts.set(key(p), (counts.get(key(p)) || 0) + 1)
+
   const cells = items
     .map((p, i) => {
       const col = Math.floor(i / rows)
       const row = i % rows
-      const x = 50 + col * 420
-      const y = top + row * rowH + 34
-      const dup = counts.get(nameSegments(p.name).map((z) => z.value).join('|').toLowerCase()) > 1
-      const segs = fitSegments(displaySegments(p, dup), 32, maxW)
-      return txt(x, y, 32, R.color, `${i + 1}.`, { bold: true, anchor: 'start' }) + nameSvg(segs, x + 62, y, 32, '#ffffff')
+      const x = 48 + col * (colW + 16)
+      const y = top + row * rowH
+      const segs = fitSegments(displaySegments(p, counts.get(key(p)) > 1), 32, colW - 100)
+      return panel(x, y, colW, rowH - 8, { opacity: row % 2 ? 0.03 : 0.07, rx: 14 }) + badge(x + 8, y + (rowH - 8) / 2, `${i + 1}`, R.color) + nameSvg(segs, x + 90, y + (rowH - 8) / 2 + 11, 32, '#ffffff')
     })
     .join('')
-  const noteSvg = notes.map((n, i) => txt(450, noteY + 26 + i * 36, 23, '#aeb6c2', n)).join('')
-  return toJpeg(`<svg xmlns="http://www.w3.org/2000/svg" width="900" height="${H}" viewBox="0 0 900 ${H}">
-  <rect width="900" height="${H}" rx="36" fill="#14181f"/>
-  <rect x="22" y="22" width="856" height="${H - 44}" rx="28" fill="none" stroke="${R.color}" stroke-width="5"/>
-  <image href="${EMOJI[role]}" x="48" y="40" width="124" height="116"/>
-  ${txt(195, 92, 44, R.color, title, { bold: true, anchor: 'start' })}
-  ${txt(195, 138, 25, '#9aa4b2', subtitle, { anchor: 'start' })}
-  <line x1="48" y1="176" x2="852" y2="176" stroke="#2b323d" stroke-width="3"/>
-  ${cells}
-  ${noteSvg}
-</svg>`)
-}
 
-export const nameSvg = (segs, x, y, size, fill) => {
-  let cx = x
-  let out = ''
-  for (const s of segs) {
-    if (s.type === 'emoji') {
-      out += `<image href="data:image/png;base64,${NAME_EMOJI[s.value]}" x="${cx.toFixed(1)}" y="${(y - size * 0.85).toFixed(1)}" width="${(size * 1.06).toFixed(1)}" height="${size.toFixed(1)}"/>`
-      cx += size * EMOJI_W
-    } else {
-      out += `<text x="${cx.toFixed(1)}" y="${y}" font-family="${FONT}" font-size="${size}" fill="${fill}" xml:space="preserve">${esc(s.value)}</text>`
-      cx += textW(s.value, size)
-    }
-  }
-  return out
+  const noteLines = notes.flatMap((n) => wrap(n, 26, 740))
+  const listBottom = top + rows * rowH
+  const noteH = noteLines.length ? noteLines.length * 38 + 30 : 0
+  const H = listBottom + (noteH ? 14 + noteH : 0) + 56
+  const noteSvg = noteLines.length
+    ? panel(48, listBottom + 14, 804, noteH, { fill: R.color, opacity: 0.1, stroke: R.color, rx: 18 }) +
+      noteLines.map((l, i) => txt(450, listBottom + 14 + 36 + i * 38, 26, '#d6dde8', l)).join('')
+    : ''
+
+  const body =
+    roleImg(role, 48, 38, 112) +
+    txt(186, 96, fitSize(title, 48, 640, { bold: true, min: 32 }), R.color, title, { bold: true, anchor: 'start' }) +
+    subLines.map((l, i) => txt(186, 140 + i * 32, 26, MUTED, l, { anchor: 'start' })).join('') +
+    divider(headerBottom) +
+    cells +
+    noteSvg
+  return toJpeg(svgPage(H, R.color, body, { glow: 0.18 }))
 }
