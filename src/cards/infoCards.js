@@ -1,11 +1,12 @@
 // 🗂️ Cartes d’information PUBLIQUES en image : règles, rôles, composition des parties.
 // (Cartes privées : render.js • cartes de fin de partie : endCards.js • design system : kit.js)
-import { MIN_PLAYERS, MAX_PLAYERS, VOYANTE_REVEAL_NAME, MAYOR, P, NECROMANCER, MENTALIST, NECRO_MIN_PLAYERS, MENTALIST_MIN_PLAYERS } from '../config.js'
+import { MIN_PLAYERS, MAX_PLAYERS, VOYANTE_REVEAL_NAME, MAYOR, P, COMPOSITION_RANDOM, NECROMANCER, MENTALIST, NECRO_MIN_PLAYERS, MENTALIST_MIN_PLAYERS } from '../config.js'
 import { ROLES, ROLE_ORDER, composition, countRoles } from '../game/roles.js'
 import { txt, toJpeg } from './draw.js'
-import { W, BODY, MUTED, GOLD, svgPage, emojiImg, roleImg, wrap, cap, fitSize, pill, panel, divider, header } from './kit.js'
+import { W, BODY, MUTED, GOLD, HEADER_BOTTOM, svgPage, emojiImg, roleImg, wrap, cap, fitSize, pill, panel, divider, header } from './kit.js'
 
-const headerIcon = roleImg('loup', 48, 36, 108)
+// Calculé à l’appel (pas à l’import) : les images de rôles ne sont chargées qu’au démarrage, après l’import des modules
+const headerIcon = () => roleImg('loup', 48, 36, 108)
 
 // ───────── Règles ─────────
 const ruleSections = () => [
@@ -23,7 +24,7 @@ const ruleSections = () => [
     title: 'La nuit — le groupe est fermé',
     color: '#b57cff',
     items: [
-      { icon: '⏰', text: `Les rôles se réveillent un à un${NECROMANCER ? ' (le Nécromancien en premier)' : ''}, puis le Garde, la Voyante, les Loups et la Sorcière.` },
+      { icon: '⏰', text: `Les rôles se réveillent un à un${NECROMANCER ? ' (le Nécromancien en premier)' : ''} : le Garde et la Voyante dans un ordre variable, puis les Loups, puis la Sorcière.` },
       { icon: '📩', text: 'Chaque pouvoir s’utilise en privé : réponds par le numéro affiché sur ta carte.' },
       { icon: '🔮', text: `La Voyante est bavarde : le rôle qu’elle découvre est annoncé à tous${VOYANTE_REVEAL_NAME ? ', avec le nom du joueur' : ' (sans le nom)'}.` },
     ],
@@ -55,7 +56,7 @@ export const rulesCard = () => {
   const textX = 122
   const maxW = W - textX - 60
   let y = 212
-  let body = header({ icon: headerIcon, title: 'RÈGLES DU LOUP-GAROU', subtitle: `${MIN_PLAYERS} à ${MAX_PLAYERS} joueurs`, color: GOLD })
+  let body = header({ icon: headerIcon(), title: 'RÈGLES DU LOUP-GAROU', subtitle: `${MIN_PLAYERS} à ${MAX_PLAYERS} joueurs`, color: GOLD })
   for (const sec of ruleSections()) {
     body += panel(48, y, W - 96, 62, { fill: sec.color, opacity: 0.16, stroke: sec.color, rx: 16 })
     body += emojiImg(sec.icon, 66, y + 10, 42) + txt(124, y + 42, 31, sec.color, sec.title, { bold: true, anchor: 'start' })
@@ -77,7 +78,7 @@ export const rolesCard = () => {
   const textX = 200
   const maxW = W - textX - 60
   let y = 212
-  let body = header({ icon: headerIcon, title: 'LES RÔLES', subtitle: 'Pouvoirs et camps', color: GOLD })
+  let body = header({ icon: headerIcon(), title: 'LES RÔLES', subtitle: 'Pouvoirs et camps', color: GOLD })
   ROLE_ORDER.forEach((r, i) => {
     const R = ROLES[r]
     const lines = wrap(cap(R.short), 26, maxW)
@@ -105,7 +106,7 @@ export const compositionCard = ({ highlight = null } = {}) => {
   const headY = 206
   const rowsTop = headY + 102
   let body = header({
-    icon: headerIcon,
+    icon: headerIcon(),
     title: 'COMPOSITION',
     subtitle: highlight ? `Cette partie : ${highlight} joueurs` : 'Les rôles selon le nombre de joueurs',
     color: GOLD,
@@ -117,7 +118,7 @@ export const compositionCard = ({ highlight = null } = {}) => {
   body += divider(headY + 82)
   let y = rowsTop
   for (let n = MIN_PLAYERS; n <= MAX_PLAYERS; n++) {
-    const counts = countRoles(composition(n))
+    const counts = countRoles(composition(n, { random: false })) // composition « type » (sans variantes)
     if (n === highlight) body += panel(40, y - 8, W - 80, rowH - 4, { fill: GOLD, opacity: 0.16, stroke: GOLD, rx: 14 })
     else if (n % 2) body += panel(40, y - 8, W - 80, rowH - 4, { opacity: 0.035, rx: 12 })
     body += txt(70, y + 30, 31, n === highlight ? '#ffd27a' : '#ffffff', `${n}`, { bold: true, anchor: 'start' })
@@ -129,7 +130,32 @@ export const compositionCard = ({ highlight = null } = {}) => {
   }
   const extra = [NECROMANCER && `Nécromancien dès ${NECRO_MIN_PLAYERS} joueurs`, MENTALIST && `Mentaliste dès ${MENTALIST_MIN_PLAYERS} joueurs`].filter(Boolean)
   body += divider(y + 6)
-  body += txt(W / 2, y + 48, 25, MUTED, '1 loup tous les 3 joueurs • 4 rôles spéciaux de base')
-  if (extra.length) body += txt(W / 2, y + 84, 25, MUTED, extra.join(' • '))
-  return toJpeg(svgPage(y + (extra.length ? 144 : 108), GOLD, body))
+  const notes = ['Composition type : 1 loup tous les 3 joueurs • 4 rôles spéciaux de base', extra.length && extra.join(' • '), COMPOSITION_RANDOM && '🎲 Chaque partie est tirée au sort : ±1 loup dès 10 joueurs, rôles spéciaux absents ou « invités »']
+    .filter(Boolean)
+    .flatMap((t) => wrap(t.replace('🎲 ', ''), 25, 790))
+  notes.forEach((t, i) => (body += txt(W / 2, y + 48 + i * 34, 25, MUTED, t)))
+  return toJpeg(svgPage(y + 70 + notes.length * 34 + 20, GOLD, body))
+}
+
+// ───────── Composition RÉELLE d’une partie (tirée au sort) ─────────
+export const gameCompositionCard = (roles) => {
+  const counts = countRoles(roles)
+  const present = ROLE_ORDER.filter((r) => counts[r])
+  const tileW = 392
+  const tileH = 132
+  const top = HEADER_BOTTOM + 30
+  let body = header({ icon: headerIcon(), title: 'COMPOSITION', subtitle: `Cette partie : ${roles.length} joueurs`, color: GOLD })
+  present.forEach((r, i) => {
+    const R = ROLES[r]
+    const x = 48 + (i % 2) * (tileW + 20)
+    const y = top + Math.floor(i / 2) * (tileH + 16)
+    body += panel(x, y, tileW, tileH, { fill: R.color, opacity: 0.12, stroke: R.color, rx: 20 })
+    body += roleImg(r, x + 16, y + 18, 92)
+    body += txt(x + 124, y + 52, fitSize(R.label, 27, tileW - 124 - 16, { bold: true }), R.color, R.label, { bold: true, anchor: 'start' })
+    body += txt(x + 124, y + 106, 50, '#ffffff', `× ${counts[r]}`, { bold: true, anchor: 'start' })
+  })
+  const bottom = top + Math.ceil(present.length / 2) * (tileH + 16)
+  body += divider(bottom + 4)
+  body += txt(W / 2, bottom + 46, 25, MUTED, COMPOSITION_RANDOM ? 'Composition tirée au sort pour cette partie' : 'Composition de cette partie')
+  return toJpeg(svgPage(bottom + 88, GOLD, body))
 }

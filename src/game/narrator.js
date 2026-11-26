@@ -9,6 +9,7 @@
 //  • les phrases des étapes de nuit (réveil / rendormissement) ne doivent jamais laisser deviner si le rôle a agi ;
 //  • les épitaphes propres à un rôle ne sont utilisées que si REVEAL_ROLES=true.
 import { REVEAL_ROLES } from '../config.js'
+import { bagDraw, chance } from '../random.js'
 
 const BANK = {
   // ───── Salon et nuit ─────
@@ -301,15 +302,8 @@ const EPITAPHS = {
 }
 
 // ───── Moteur ─────
-const lastIndex = new Map()
-const choose = (key, list) => {
-  if (list.length === 1) return list[0]
-  let i
-  do i = Math.floor(Math.random() * list.length)
-  while (i === lastIndex.get(key))
-  lastIndex.set(key, i)
-  return list[i]
-}
+// Pioche sans remise : une phrase ne revient qu’après avoir vu toutes les autres de sa liste (voir random.js)
+const choose = (key, list) => bagDraw(key, list)
 
 export const tell = (key, vars = {}) => {
   const list = BANK[key]
@@ -320,7 +314,7 @@ export const tell = (key, vars = {}) => {
 // Épitaphe d’un joueur mort. Les épitaphes propres à un rôle ne sont utilisées que si les rôles des morts sont révélés.
 export const epitaph = (p) => {
   const specific = REVEAL_ROLES ? EPITAPHS[p.role] : null
-  const pool = specific && Math.random() < 0.5 ? specific : EPITAPHS.any
+  const pool = specific && chance(0.5) ? specific : EPITAPHS.any
   return `🪦 _« ${choose(specific && pool === specific ? `epitaph.${p.role}` : 'epitaph', pool)} »_`
 }
 

@@ -31,6 +31,11 @@ const MIGRATIONS = [
    CREATE INDEX idx_history_chat ON game_history (chat, ended_at);
    CREATE TABLE saved_games (key TEXT PRIMARY KEY, resume_at TEXT NOT NULL, saved_at INTEGER NOT NULL, data TEXT NOT NULL);
    CREATE TABLE wolf_groups (jid TEXT PRIMARY KEY);`,
+  // 2 : mémoire des rôles reçus (rotation des rôles)
+  `CREATE TABLE role_history (
+     id INTEGER PRIMARY KEY AUTOINCREMENT, chat TEXT NOT NULL, num TEXT NOT NULL, role TEXT NOT NULL, given_at INTEGER NOT NULL
+   );
+   CREATE INDEX idx_role_history ON role_history (chat, num, id);`,
 ]
 
 let db = null

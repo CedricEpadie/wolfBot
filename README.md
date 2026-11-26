@@ -15,7 +15,7 @@ Bot autonome (Baileys), lancé en arrière-plan avec **pm2** via **yarn**. Préf
 | 🎩 Mentaliste *(dès 10 joueurs)* | reçoit en privé des prémonitions vagues pendant le vote |
 | 🧑‍🌾 Simple villageois | aucun pouvoir, sa voix compte |
 
-Composition automatique (**6 à 20 joueurs**, `MAX_PLAYERS` dans `src/config.js`) : 4 rôles spéciaux + 1 loup tous les 3 joueurs (Nécromancien dès 8, Mentaliste dès 10), le reste en villageois. À 20 joueurs : 6 loups, 6 rôles spéciaux, 8 villageois. La distribution des cartes en privé est étalée (`DM_DELAY_SECONDS` entre deux envois) : compter ~1 min 20 pour 20 joueurs.
+Composition **tirée au sort à chaque partie** (**6 à 20 joueurs**, `MAX_PLAYERS` dans `src/config.js`). Composition type : 4 rôles spéciaux + 1 loup tous les 3 joueurs (Nécromancien dès 8, Mentaliste dès 10), le reste en villageois — voir « L'aléatoire » ci-dessous pour les variantes. À 20 joueurs : 6 loups, 6 rôles spéciaux, 8 villageois. La distribution des cartes en privé est étalée (`DM_DELAY_SECONDS` entre deux envois) : compter ~1 min 20 pour 20 joueurs.
 (6 joueurs : 2 loups ; 9 joueurs : 3 loups ; 12 joueurs : 4 loups…). Voir `/loup roles`.
 
 ## Installation
@@ -111,12 +111,21 @@ Les cartes affichent le nom de **profil** du joueur, pas le nom enregistré dans
 
 1. `/loup` ouvre le salon (rappels de décompte), `/loup join` pour rejoindre, `/loup go` pour lancer (départ auto sinon).
 2. **Distribution** des cartes avec barre de progression, puis composition annoncée.
-3. **Nuit** (groupe fermé) : 👻 Nécromancien (en parallèle) → 🛡️ Garde → 🔮 Voyante → 🐺 Loups → 🧙‍♀️ Sorcière. Chaque étape est annoncée dans le groupe ;
+3. **Nuit** (groupe fermé) : 👻 Nécromancien (en parallèle) → 🛡️ Garde et 🔮 Voyante (ordre tiré au sort chaque nuit) → 🐺 Loups → 🧙‍♀️ Sorcière. Chaque étape est annoncée dans le groupe ;
    un rôle mort attend un temps aléatoire pour ne rien révéler. Les loups discutent et votent dans leur groupe secret, ouvert seulement pendant leur étape (ou par cartes privées si le groupe est désactivé).
 4. **Jour** (groupe rouvert) : annonce dramatique des morts (rôle révélé + épitaphe), annonce de la voyante bavarde, débat chronométré,
    puis **vote** : la liste des joueurs en vie est envoyée dans le groupe, on vote en **mentionnant (@)** le suspect : un seul @ par message, et répondre à un message ne vote pas.
    Votes publics, fin anticipée quand tout le monde a voté. L'annonce des morts de nuit est volontairement neutre : on ne dit jamais *comment* le joueur est mort.
 5. Le Chasseur tire quand il meurt (30 s). Fin de partie : récap des rôles, statistiques mises à jour, classement `/loup top`.
+
+### L'aléatoire 🎲
+Tout ce qui est « au hasard » passe par un seul module, `src/random.js` : générateur **cryptographique** (`node:crypto`), mélange de Fisher-Yates sans biais (vérifié par test du χ² : permutations et positions équiprobables), jamais `Math.random`.
+- **Rotation des rôles** (`ROLE_ROTATION`, 0 à 1, défaut 0,8) : un tirage 100 % indépendant produit beaucoup de répétitions (à 20 joueurs, ~27 % retombent sur le rôle de la partie précédente). Le bot garde en base (`role_history`) les rôles reçus lors des 4 dernières parties de chaque joueur dans le groupe et **réduit la probabilité de retomber sur un rôle déjà reçu** (jamais à zéro : « moins probable », pas « impossible »). Mesuré sur 30 000 parties simulées à 20 joueurs : même rôle que la partie précédente 26,5 % → **17 %**, loup deux fois de suite 30 % → **18 %**, séries de 3 d'affilée ÷ 2,3, sans changer la fréquence moyenne de chaque rôle ni favoriser un siège. `ROLE_ROTATION=0` redonne le hasard pur sans mémoire.
+- **Composition variable** (`COMPOSITION_RANDOM`, défaut true) : dès 10 joueurs, 1 loup de plus ou de moins (25 % / 50 % / 25 %, jamais plus de 42 % de loups) ; dès 7 joueurs, un rôle spécial peut manquer (30 %, ou deux : 10 %, toujours au moins 3) et le Nécromancien ou le Mentaliste peut venir « en invité » avant son seuil habituel (25 %). À 6 joueurs la partie reste classique. La **vraie** composition est annoncée en image au lancement ; le tableau de `/loup roles` montre la composition type.
+- **Ordre de la nuit** : le Garde et la Voyante (indépendants) se réveillent dans un ordre tiré au sort chaque nuit.
+- **Annonce des morts de nuit** : l'ordre est tiré au sort. (Avant, la victime des loups était toujours annoncée avant celle du poison, ce qui trahissait la Sorcière.)
+- **Narrateur** : chaque événement pioche **sans remise** dans ses variantes (une phrase ne revient qu'après avoir vu toutes les autres), au lieu d'un simple « pas deux fois la même de suite ». Idem pour les épitaphes.
+- Aussi tirés avec ce générateur : ordre des choix sur chaque carte (différent pour chaque joueur), égalités du maire, victime des loups en cas d'égalité, durée des étapes factices de nuit.
 
 ### Le maire 👑
 Au **jour 1**, avant le débat, le village élit un maire (60 s, on vote en mentionnant le candidat, on peut voter pour soi ; égalité ou aucun vote = tirage au sort).
@@ -193,7 +202,7 @@ Toutes les mentions de joueurs sont de vraies mentions WhatsApp (@).
 ## Réglages
 
 Dans `.env` : `PREFIX`, `ROLE_DELIVERY`, `ROLE_SELF_DESTRUCT`, `WIPE_DM_CHAT`, `VOYANTE_REVEAL_NAME`
-(annoncer aussi le nom du joueur sondé), `REVEAL_ROLES` (révéler le rôle des morts), `DEAD_SILENCE` (supprimer les messages des morts), `WOLF_GROUP` (`keep`, `leave` ou `off`), `MIN_PLAYERS`, `MAYOR`, `NECROMANCER`, `MENTALIST` (true/false), `DATA_DIR`, `RESUME_GAMES`, `RESUME_MAX_MINUTES`, `INFO_DELIVERY` (`photo` ou `text`).
+(annoncer aussi le nom du joueur sondé), `REVEAL_ROLES` (révéler le rôle des morts), `DEAD_SILENCE` (supprimer les messages des morts), `WOLF_GROUP` (`keep`, `leave` ou `off`), `MIN_PLAYERS`, `MAYOR`, `NECROMANCER`, `MENTALIST`, `COMPOSITION_RANDOM` (true/false), `ROLE_ROTATION` (0 à 1), `DATA_DIR`, `RESUME_GAMES`, `RESUME_MAX_MINUTES`, `INFO_DELIVERY` (`photo` ou `text`).
 Les durées (débat, vote, étapes de nuit…) sont dans `src/config.js`.
 
 Le bot Imposteur et ce bot utilisent chacun leur propre commande (`/imposteur …` et `/loup …`) : ils peuvent cohabiter, mais un bot = une session WhatsApp (un numéro).
@@ -208,8 +217,9 @@ src/
 ├── config.js          variables .env + durées/limites du jeu
 ├── env.js, paths.js   chargement du .env, racine du projet
 ├── state.js           parties en cours (en mémoire)
-├── persistence/       db.js (SQLite + migrations) • stats.js • saves.js
+├── persistence/       db.js (SQLite + migrations) • stats.js • saves.js • roleHistory.js
 ├── utils.js           petits utilitaires génériques
+├── random.js          source d'aléa unique (crypto, tirages sans biais, sacs sans remise)
 ├── whatsapp/          socket.js (socket courant) • connection.js (QR, reconnexion)
 │                      messaging.js (say, sendText, sendCard…) • group.js (admin, verrouillage, dissolution)
 ├── cards/             render.js (SVG→JPEG) • names.js (noms/emojis) • assets.js • fonts.js • roleCard.js
@@ -218,7 +228,7 @@ src/
 ├── game/              roles.js (rôles + composition) • players.js • timers.js • prompts.js
 │                      flow.js (lancement, distribution, boucle) • night.js • day.js • mayor.js • resume.js
 │                      deadGroup.js (groupe des morts, Nécromancien) • mentalist.js (prémonitions, durée du vote)
-│                      narrator.js (phrases variées + épitaphes)
+│                      assignment.js (attribution pondérée des rôles) • narrator.js (phrases variées + épitaphes)
 │                      deaths.js (morts, chasseur, silence) • lifecycle.js (fin/annulation)
 │                      wolfGroup.js (groupe secret des loups)
 ├── handlers/          messages.js (aiguillage) • private.js (réponses aux cartes en privé)

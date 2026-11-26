@@ -24,6 +24,9 @@ const findNum = (d, chat, ids) => {
   return d.prepare(`SELECT num FROM player_ids WHERE chat = ? AND id IN (${marks}) LIMIT 1`).get(chat, ...list)?.num ?? null
 }
 
+// Numéro sous lequel un joueur est connu dans ce groupe (par n’importe lequel de ses identifiants), ou null
+export const resolveNum = (chat, ids) => findNum(getDb(), chat, ids)
+
 // Enregistre une partie terminée (winner : 'village' | 'loups' | 'egalite') — tout ou rien
 export const recordGame = (g, winner) => {
   transaction((d) => {

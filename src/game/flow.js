@@ -2,7 +2,7 @@
 import { MIN_PLAYERS, MAYOR, P, READ_SECONDS, DM_DELAY_SECONDS, SELF_DESTRUCT } from '../config.js'
 import { say, editMsg, sendCard, sendInfoCard } from '../whatsapp/messaging.js'
 import { lockGroup, resolveDms } from '../whatsapp/group.js'
-import { shuffle, sleep, progressBar, tag } from '../utils.js'
+import { sleep, progressBar, tag } from '../utils.js'
 import { alive, jidsOf, listOf } from './players.js'
 import { composition, compoText } from './roles.js'
 import { roleCardFor } from '../cards/roleCard.js'
@@ -10,7 +10,9 @@ import { stopTimers, waitStep } from './timers.js'
 import { games } from '../state.js'
 import { abort } from './lifecycle.js'
 import { createWolfGroup, setWolfGroupLocked } from './wolfGroup.js'
-import { compositionCard } from '../cards/infoCards.js'
+import { gameCompositionCard } from '../cards/infoCards.js'
+import { assignRoles } from './assignment.js'
+import { recentRoles, recordRoles } from '../persistence/roleHistory.js'
 import { saveGame } from '../persistence/saves.js'
 import { night } from './night.js'
 import { day } from './day.js'
@@ -63,8 +65,10 @@ export const resumeGame = (g, resumeAt) =>
 const distribute = async (g) => {
   g.phase = 'roles'
   const total = g.players.length
-  const roles = shuffle(composition(total))
-  g.players.forEach((p, i) => (p.role = roles[i]))
+  const roles = composition(total) // composition tirée au sort (variantes) : voir roles.js
+  const assigned = assignRoles(g.players, roles, recentRoles(g.key, g.players)) // tirage pondéré par les dernières parties
+  g.players.forEach((p) => (p.role = assigned.get(p)))
+  recordRoles(g)
   g.prompts = new Map()
   g.witch = { life: true, death: true }
   g.lastProtected = null
@@ -102,10 +106,10 @@ const distribute = async (g) => {
   await createWolfGroup(g)
   if (!alive(g)) return
   const compoMsg =
-    `🎭 *Composition de la partie*\n${compoText(total)}\n\n📖 Lis bien ta carte : elle s’efface après *${SELF_DESTRUCT || '∞'} s* (renvoi : *${P}loup role* en privé).\n` +
+    `🎭 *Composition de la partie*\n${compoText(roles)}\n\n📖 Lis bien ta carte : elle s’efface après *${SELF_DESTRUCT || '∞'} s* (renvoi : *${P}loup role* en privé).\n` +
       (MAYOR ? '👑 Un maire sera élu au matin du jour 1.\n' : '') +
       `🌙 La première nuit tombe dans *${READ_SECONDS} s*…`
-  await sendInfoCard(g.key, () => compositionCard({ highlight: total }), compoMsg, { caption: compoMsg })
+  await sendInfoCard(g.key, () => gameCompositionCard(roles), compoMsg, { caption: compoMsg })
   await waitStep(g, READ_SECONDS, { marks: [10, 5], tick: (m) => say(g.key, `⏳ La nuit tombe dans *${m} s*…`) })
 }
 

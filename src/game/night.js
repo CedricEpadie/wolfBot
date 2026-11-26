@@ -203,10 +203,12 @@ export const night = async (g) => {
   if (!alive(g)) return
   const necro = await stepNecro(g)
   if (!alive(g)) return
-  await stepGarde(g)
-  if (!alive(g)) return
-  await stepVoyante(g)
-  if (!alive(g)) return
+  // Le Garde et la Voyante n’ont aucun lien entre eux : leur ordre de réveil change chaque nuit.
+  // (Les Loups passent toujours après le Garde, et la Sorcière après les Loups.)
+  for (const step of shuffle([stepGarde, stepVoyante])) {
+    await step(g)
+    if (!alive(g)) return
+  }
   await stepLoups(g)
   if (!alive(g)) return
   await stepSorciere(g)
@@ -234,6 +236,8 @@ const dawn = async (g) => {
     dead.push(n.poisoned)
     n.poisoned.death = { kind: 'poison', no: g.nightNo }
   }
+  // L’ordre d’annonce est tiré au sort : il ne doit pas révéler qui est la victime des loups et qui est celle du poison
+  dead.splice(0, dead.length, ...shuffle(dead))
 
   await say(g.key, `☀️ *JOUR ${g.nightNo}*\n\n${tell('dawn')}\n${g.locked === false ? '🔓 Le groupe est rouvert.' : ''}`)
   await sleep(2500)

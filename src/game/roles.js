@@ -1,6 +1,7 @@
 // 🎭 Définition des rôles et composition d’une partie
 // → pour ajouter un rôle : l’ajouter dans ROLES + ROLE_ORDER (+ une image assets/emoji/<img>.png), puis dans composition().
-import { NECROMANCER, MENTALIST, NECRO_MIN_PLAYERS, MENTALIST_MIN_PLAYERS } from '../config.js'
+import { NECROMANCER, MENTALIST, NECRO_MIN_PLAYERS, MENTALIST_MIN_PLAYERS, COMPOSITION_RANDOM } from '../config.js'
+import { chance, int, pick, weightedPick } from '../random.js'
 
 export const ROLES = {
   loup: {
@@ -78,12 +79,36 @@ export const ROLES = {
 }
 export const ROLE_ORDER = ['loup', 'sorciere', 'chasseur', 'voyante', 'garde', 'necromancien', 'mentaliste', 'villageois']
 
-export const composition = (n) => {
-  const wolves = Math.max(1, Math.floor(n / 3))
-  const list = ['sorciere', 'chasseur', 'voyante', 'garde']
-  if (NECROMANCER && n >= NECRO_MIN_PLAYERS) list.push('necromancien')
-  if (MENTALIST && n >= MENTALIST_MIN_PLAYERS) list.push('mentaliste')
-  for (let i = 0; i < wolves; i++) list.push('loup')
+const CORE_SPECIALS = ['sorciere', 'chasseur', 'voyante', 'garde']
+const GUEST_MIN_PLAYERS = 7 // sous ce nombre de joueurs, la composition reste classique
+const GUEST_CHANCE = 0.25 // chance qu’un rôle « invité » (Nécromancien / Mentaliste) apparaisse avant son seuil habituel
+
+// Composition d’une partie de n joueurs (liste de rôles, non mélangée).
+//  • random = false : composition « type », toujours identique (tableaux d’aide, règles).
+//  • random = true  : variantes tirées au sort (voir COMPOSITION_RANDOM) :
+//      - dès 10 joueurs : 1 loup de plus ou de moins (25 % / 50 % / 25 %), sans dépasser 42 % de loups ;
+//      - dès 7 joueurs : un rôle spécial peut manquer (30 %) ou deux (10 %) — toujours au moins 3 ;
+//      - dès 7 joueurs : le Nécromancien / Mentaliste peut venir « en invité » remplacer un autre rôle spécial.
+export const composition = (n, { random = COMPOSITION_RANDOM } = {}) => {
+  const base = Math.max(1, Math.floor(n / 3))
+  const specials = [...CORE_SPECIALS]
+  const guests = []
+  if (NECROMANCER) (n >= NECRO_MIN_PLAYERS ? specials : guests).push('necromancien')
+  if (MENTALIST) (n >= MENTALIST_MIN_PLAYERS ? specials : guests).push('mentaliste')
+
+  let wolves = base
+  if (random) {
+    if (n >= 10) wolves = Math.min(Math.max(base + weightedPick([-1, 0, 1], [1, 2, 1]), 2), Math.floor(n * 0.42))
+    if (n >= GUEST_MIN_PLAYERS) {
+      for (const guest of guests) {
+        const swappable = specials.map((r, i) => i).filter((i) => !['necromancien', 'mentaliste'].includes(specials[i]))
+        if (chance(GUEST_CHANCE) && swappable.length) specials[pick(swappable)] = guest
+      }
+      const drop = weightedPick([0, 1, 2], [60, 30, 10])
+      for (let i = 0; i < drop && specials.length > 3; i++) specials.splice(int(specials.length), 1)
+    }
+  }
+  const list = [...specials.slice(0, Math.max(0, n - wolves)), ...Array(wolves).fill('loup')]
   while (list.length < n) list.push('villageois')
   return list.slice(0, n)
 }
@@ -92,11 +117,14 @@ export const countRoles = (list) => {
   for (const r of list) c[r] = (c[r] || 0) + 1
   return c
 }
-export const compoText = (n) =>
-  ROLE_ORDER.map((r) => ({ r, k: countRoles(composition(n))[r] || 0 }))
-    .filter((x) => x.k)
-    .map((x) => `${x.k} ${ROLES[x.r].emoji} ${ROLES[x.r].label}`)
+// Texte de composition : à partir d’une liste de rôles (la vraie composition d’une partie) ou d’un nombre de joueurs
+// (composition « type »).
+export const compoText = (source) => {
+  const counts = countRoles(Array.isArray(source) ? source : composition(source, { random: false }))
+  return ROLE_ORDER.filter((r) => counts[r])
+    .map((r) => `${counts[r]} ${ROLES[r].emoji} ${ROLES[r].label}`)
     .join(' • ')
+}
 
 // Ce joueur a-t-il gagné ? winner : 'village' | 'loups' | 'egalite' (égalité : personne ne gagne)
 export const didWin = (role, winner) => (winner === 'village' ? role !== 'loup' : winner === 'loups' ? role === 'loup' : false)

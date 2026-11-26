@@ -66,3 +66,12 @@ export const NECRO_MIN_PLAYERS = 8 // le Nécromancien apparaît à partir de ce
 export const MENTALIST_MIN_PLAYERS = 10 // le Mentaliste apparaît à partir de ce nombre de joueurs
 export const NIGHT_NECRO_SECONDS = 90 // durée minimale de la visite du Nécromancien au groupe des morts (la nuit ne finit pas avant)
 export const MENTALIST_EXTRA_SECONDS = 30 // temps de vote supplémentaire quand un Mentaliste est dans la partie
+
+// ───────── Aléatoire ─────────
+// Rotation des rôles : une valeur de 0 à 1 qui réduit la probabilité de retomber sur un rôle déjà reçu dans les
+// 4 dernières parties du groupe (0 = hasard pur sans mémoire, 1 = rotation maximale). Jamais de probabilité nulle.
+const rotation = Number.parseFloat(process.env.ROLE_ROTATION)
+export const ROLE_ROTATION = Number.isFinite(rotation) ? Math.min(1, Math.max(0, rotation)) : 0.8
+// Composition variable : ±1 loup dès 10 joueurs, rôles spéciaux parfois absents ou remplacés par un « invité »
+// (false = composition fixe, toujours identique pour un nombre de joueurs donné)
+export const COMPOSITION_RANDOM = (process.env.COMPOSITION_RANDOM || 'true').toLowerCase() !== 'false'

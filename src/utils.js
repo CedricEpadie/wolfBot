@@ -1,3 +1,5 @@
+import { float } from './random.js'
+
 // 🧰 Petits utilitaires génériques (aucune dépendance au jeu)
 
 const cooldowns = new Map()
@@ -8,17 +10,10 @@ export const clean = (jid) => {
   return `${user.split(':')[0]}@${server}`
 }
 export const tag = (jid) => '@' + num(jid)
-export const pick = (arr) => arr[Math.floor(Math.random() * arr.length)]
-export const rand = (a, b) => a + Math.random() * (b - a)
+// Aléa : voir random.js (générateur cryptographique, tirages sans biais)
+export { pick, shuffle } from './random.js'
+export const rand = (a, b) => a + float() * (b - a)
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
-export const shuffle = (arr) => {
-  const a = [...arr]
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[a[i], a[j]] = [a[j], a[i]]
-  }
-  return a
-}
 export const norm = (s) =>
   String(s || '')
     .toLowerCase()

@@ -1,11 +1,11 @@
 // 📖 Textes d’aide : règles, rôles, liste des commandes
-import { P, MIN_PLAYERS, MAX_PLAYERS, VOYANTE_REVEAL_NAME, MAYOR, NECROMANCER, MENTALIST, NECRO_MIN_PLAYERS, MENTALIST_MIN_PLAYERS } from '../config.js'
+import { P, COMPOSITION_RANDOM, MIN_PLAYERS, MAX_PLAYERS, VOYANTE_REVEAL_NAME, MAYOR, NECROMANCER, MENTALIST, NECRO_MIN_PLAYERS, MENTALIST_MIN_PLAYERS } from '../config.js'
 import { ROLES, ROLE_ORDER, compoText } from '../game/roles.js'
 
 export const RULES = () =>
   `📖 *RÈGLES DU LOUP-GAROU*\n\n` +
   `🏡 *Village* : démasquer et éliminer tous les loups.\n🐺 *Loups-Garous* : devenir aussi nombreux que les autres joueurs.\n\n` +
-  `🌙 *La nuit* (le groupe est fermé) : le Garde protège, la Voyante sonde, les Loups choisissent une victime, la Sorcière agit. Tout se passe par cartes numérotées en privé.\n` +
+  `🌙 *La nuit* (le groupe est fermé) : le Garde protège et la Voyante sonde (dans un ordre variable chaque nuit), puis les Loups choisissent une victime, puis la Sorcière agit. Tout se passe par cartes numérotées en privé.\n` +
   `☀️ *Le jour* (le groupe est rouvert) : le bot annonce les morts (et leur rôle), le village débat puis vote. Le joueur le plus voté est éliminé (${MAYOR ? 'égalité = le maire tranche' : 'égalité = personne'}).\n` +
   (MAYOR ? `👑 *Le maire* est élu au jour 1 : sa voix compte double, il tranche les égalités et désigne son successeur s’il meurt.\n` : '') +
   `\n` +
@@ -22,7 +22,7 @@ export const ROLES_TEXT = () => {
   const lines = ROLE_ORDER.map((r) => `${ROLES[r].emoji} *${ROLES[r].label}* — ${ROLES[r].short}`).join('\n')
   const table = []
   for (let n = MIN_PLAYERS; n <= Math.min(MAX_PLAYERS, MIN_PLAYERS + 6); n++) table.push(`• ${n} joueurs : ${compoText(n)}`)
-  return `🎭 *RÔLES DISPONIBLES*\n\n${lines}\n\n📊 *Composition selon le nombre de joueurs*\n${table.join('\n')}\n• …au-delà : 1 loup de plus tous les 3 joueurs`
+  return `🎭 *RÔLES DISPONIBLES*\n\n${lines}\n\n📊 *Composition type selon le nombre de joueurs*\n${table.join('\n')}\n• …au-delà : 1 loup de plus tous les 3 joueurs${COMPOSITION_RANDOM ? '\n\n🎲 Chaque partie est tirée au sort : ±1 loup dès 10 joueurs, un rôle spécial peut manquer ou être remplacé par un « invité » (Nécromancien, Mentaliste).' : ''}`
 }
 
 export const HELP = () =>
