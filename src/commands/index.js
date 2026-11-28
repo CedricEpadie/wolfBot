@@ -4,7 +4,7 @@
 // sous la forme { names: ['mot', 'alias'], groupOnly: true|false, run: async (ctx) => … }
 // puis l’ajouter à la liste COMMANDS ci-dessous.
 //
-// ctx = { chat, isGroup, me, mentioned, g (partie du groupe ou undefined), isStarter }
+// ctx = { chat, isGroup, me, mentioned, g (partie du groupe ou undefined), args (mots après la commande), isStarter }
 import { COMMAND_WORDS, P } from '../config.js'
 import { say } from '../whatsapp/messaging.js'
 import { norm } from '../utils.js'
@@ -27,7 +27,7 @@ export const handleCommand = async (chat, isGroup, me, text, mentioned) => {
 
   const cmd = word ? BY_NAME.get(word) : openGame // « /loup » seul = ouvrir une partie
   const g = games.get(chat)
-  const ctx = { chat, isGroup, me, mentioned, g, isStarter: !!g && hasId(g.starter, me.ids) }
+  const ctx = { chat, isGroup, me, mentioned, g, args: args.slice(1), isStarter: !!g && hasId(g.starter, me.ids) }
 
   if (cmd && !cmd.groupOnly) return cmd.run(ctx) // utilisable aussi en privé
   if (!isGroup) return say(chat, `🐺 Ce jeu se joue dans un groupe. Ici, tape *${P}loup role* pour retrouver ta carte, ou *${P}loup aide*.`)

@@ -88,7 +88,7 @@ export const sendCard = async (p, renderFn, fallbackText, caption) => {
 
 // Carte d’information PUBLIQUE (règles, rôles, composition…) envoyée dans un chat : image + légende, ou texte
 // (INFO_DELIVERY=text, ou si l’image ne peut pas être générée). Retourne true si l’image a été envoyée.
-export const sendInfoCard = async (chat, render, fallbackText, { caption = '', mentions = [] } = {}) => {
+export const sendInfoCard = async (chat, render, fallbackText, { caption = '', mentions = [], fallbackMentions = mentions } = {}) => {
   if (INFO_DELIVERY === 'photo') {
     try {
       const image = await render()
@@ -99,6 +99,6 @@ export const sendInfoCard = async (chat, render, fallbackText, { caption = '', m
       console.warn('[loup-garou] carte d’information impossible, envoi en texte :', e.message)
     }
   }
-  if (fallbackText) await say(chat, fallbackText, mentions)
+  if (fallbackText) await say(chat, fallbackText, fallbackMentions)
   return false
 }

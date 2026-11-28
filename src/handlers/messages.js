@@ -6,7 +6,7 @@ import { isOwnText } from '../whatsapp/messaging.js'
 import { senderOf, hasId, findPlayer } from '../game/players.js'
 import { games } from '../state.js'
 import { wolfGroups, wolfGroupVote, WOLF_VOTE_RE } from '../game/wolfGroup.js'
-import { silenceDead } from '../game/deaths.js'
+import { handleHunterReply, silenceDead } from '../game/deaths.js'
 import { registerVote } from '../game/day.js'
 import { isVotePhase } from '../game/mayor.js'
 import { handlePrivate } from './private.js'
@@ -32,6 +32,8 @@ export const onMessage = async (m) => {
   const c = normalizeMessageContent(m.message)
   const text = String(c?.conversation || c?.extendedTextMessage?.text || c?.imageMessage?.caption || c?.videoMessage?.caption || '').trim()
   if (m.key.fromMe && text && isOwnText(text)) return
+  const info = c?.extendedTextMessage?.contextInfo
+  const mentioned = info?.mentionedJid || []
 
   if (wolfGroups.has(chat)) {
     // Groupe secret des loups : seuls les votes (un numéro seul) comptent ; aucune commande ici
@@ -49,6 +51,11 @@ export const onMessage = async (m) => {
   // Joueur éliminé qui écrit dans le groupe principal (texte, image, vocal, sticker…) : message supprimé
   if (isGroup && !m.key.fromMe) {
     const gm = games.get(chat)
+    // Exception : le chasseur qui vient de mourir désigne sa cible dans le groupe (tir public)
+    if (gm?.hunterPick && text) {
+      const who = senderOf(m)
+      if (who && hasId(gm.hunterPick.hunter, who.ids) && (await handleHunterReply(gm, text, mentioned))) return
+    }
     if (gm && gm.players.some((p) => p.role)) {
       const who = senderOf(m)
       const dead = who && gm.players.find((p) => !p.alive && hasId(p, who.ids))
@@ -64,8 +71,6 @@ export const onMessage = async (m) => {
     const p = findPlayer(g, me.ids)
     if (p) p.name = me.name
   }
-  const info = c?.extendedTextMessage?.contextInfo
-  const mentioned = info?.mentionedJid || []
 
   if (!isGroup) {
     const isCmd = new RegExp(`^${escRe(P)}\\s*(loup|loups|lg)\\b`, 'i').test(text)

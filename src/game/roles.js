@@ -28,8 +28,8 @@ export const ROLES = {
     img: 'chasseur',
     color: '#f5a524',
     camp: 'Camp : le Village',
-    lines: ['Si tu meurs (de nuit ou par le vote),', 'tu emportes IMMÉDIATEMENT un joueur', 'de ton choix avec toi.'],
-    short: 'quand il meurt, il tire une dernière balle sur un joueur',
+    lines: ['Si tu meurs (de nuit ou par le vote), tu tires', 'ta dernière balle EN PUBLIC : tu désignes dans', 'le groupe le joueur que tu emportes avec toi.'],
+    short: 'quand il meurt, il tire une dernière balle sur un joueur, en public dans le groupe',
   },
   voyante: {
     label: 'VOYANTE BAVARDE',

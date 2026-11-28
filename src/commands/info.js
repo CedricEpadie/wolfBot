@@ -3,9 +3,11 @@ import { P, INFO_DELIVERY } from '../config.js'
 import { say, sendCard, sendInfoCard } from '../whatsapp/messaging.js'
 import { num, onCooldown, tag } from '../utils.js'
 import { games } from '../state.js'
-import { statsOf, topOf } from '../persistence/stats.js'
+import { rankOf, statsOf, topOf } from '../persistence/stats.js'
+import { recentRoles } from '../persistence/roleHistory.js'
 import { rulesCard, rolesCard, compositionCard } from '../cards/infoCards.js'
 import { podiumCard } from '../cards/endCards.js'
+import { statsCard } from '../cards/statsCard.js'
 import { ROLES } from '../game/roles.js'
 import { findPlayer, jidsOf, listOf, living } from '../game/players.js'
 import { roleCardFor } from '../cards/roleCard.js'
@@ -42,8 +44,8 @@ const showTop = async ({ chat }) => {
   await sendInfoCard(chat, () => podiumCard({ entries: sorted }), text, { caption: '🏆 *Classement du groupe*', mentions: sorted.map((e) => e.jid) })
 }
 
-// Statistiques d’un joueur : le sien, ou celui qu’on mentionne (« /loup stats @x »)
-const showStats = ({ chat, me, mentioned }) => {
+// Statistiques d’un joueur : le sien, ou celui qu’on mentionne (« /loup stats @x »), en carte image
+const showStats = async ({ chat, me, mentioned }) => {
   const target = mentioned[0]
   const ids = target ? new Set([num(target)]) : me.ids
   const e = statsOf(chat, ids)
@@ -54,16 +56,16 @@ const showStats = ({ chat, me, mentioned }) => {
     .sort((a, b) => b[1] - a[1])
     .map(([r, k]) => `${ROLES[r]?.emoji || '❔'} ×${k}`)
     .join('  ')
-  return say(
-    chat,
+  const text =
     `📈 *Statistiques de ${tag(who)}*\n\n` +
-      `🎮 Parties : *${e.played}* • 🏆 Victoires : *${e.wins}* (${rate} %)\n` +
-      `🐺 Victoires en loup : ${e.winsWolf} • 🏡 en village : ${e.winsVillage}\n` +
-      `🔥 Série en cours : ${e.streak} (record : ${e.bestStreak})\n` +
-      `🫀 Survivant : ${e.survived} fois • 👑 Maire : ${e.mayor} fois\n` +
-      `🎭 Rôles joués : ${roles}`,
-    [who]
-  )
+    `🎮 Parties : *${e.played}* • 🏆 Victoires : *${e.wins}* (${rate} %)\n` +
+    `🐺 Victoires en loup : ${e.winsWolf} • 🏡 en village : ${e.winsVillage}\n` +
+    `🔥 Série en cours : ${e.streak} (record : ${e.bestStreak})\n` +
+    `🫀 Survivant : ${e.survived} fois • 👑 Maire : ${e.mayor} fois\n` +
+    `🎭 Rôles joués : ${roles}`
+  const probe = { ids, num: [...ids][0] }
+  const recent = recentRoles(chat, [probe], 6).get(probe) || []
+  return sendInfoCard(chat, () => statsCard({ entry: e, rank: rankOf(chat, ids), recent }), text, { caption: `📈 *Statistiques de ${tag(who)}*`, mentions: [who] })
 }
 
 const showState = ({ chat, g }) => {

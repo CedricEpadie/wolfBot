@@ -1,5 +1,6 @@
-// 👻 Le groupe des morts : créé au premier mort (si la partie compte un Nécromancien), toujours ouvert aux morts.
+// 👻 Le groupe des morts : créé dès le PREMIER mort, chaque nouveau mort y est ajouté, toujours ouvert aux morts.
 // Le Nécromancien (vivant) n’y est ajouté que pendant la nuit, puis retiré à l’aube.
+import { DEAD_GROUP } from '../config.js'
 import { sock } from '../whatsapp/socket.js'
 import { say, sendText, wipeChat } from '../whatsapp/messaging.js'
 import { dissolveGroup } from '../whatsapp/group.js'
@@ -11,13 +12,16 @@ import { trackWolfGroup, untrackWolfGroup } from './wolfGroup.js'
 // État : g.deadGroup = { jid, added: Set(joueurs morts déjà ajoutés), necroIn: le Nécromancien est dans le groupe }
 
 const NAME = '👻 Les Morts — Loup-Garou'
+const INVITE_DEAD = '👻 Je n’ai pas pu t’ajouter au groupe des morts (réglage de confidentialité ?). Rejoins-le avec ce lien, sans le partager :'
 
 const memberIds = async (jid) => {
   const ids = new Set()
   try {
     const m = await sock.groupMetadata(jid)
     for (const x of m.participants || []) for (const v of [x.id, x.lid, x.jid, x.phoneNumber]) if (v) ids.add(num(v))
-  } catch {}
+  } catch (e) {
+    console.warn('[loup-garou] liste des membres du groupe des morts illisible :', e.message)
+  }
   return ids
 }
 const isIn = (ids, p) => [...p.ids].some((i) => ids.has(i))
@@ -31,7 +35,7 @@ const inviteMissing = async (jid, players, message) => {
   try {
     link = 'https://chat.whatsapp.com/' + (await sock.groupInviteCode(jid))
   } catch (e) {
-    console.warn('[loup-garou] lien d’invitation impossible :', e.message)
+    console.warn('[loup-garou] lien d’invitation du groupe des morts impossible :', e.message)
   }
   if (link) for (const p of missing) await sendText([p.dm, p.jid], `${message}\n${link}`)
 }
@@ -39,11 +43,13 @@ const inviteMissing = async (jid, players, message) => {
 const addPlayers = async (jid, players, message) => {
   if (!players.length) return
   try {
-    await sock.groupParticipantsUpdate(jid, players.map((p) => p.dm), 'add')
+    const res = await sock.groupParticipantsUpdate(jid, players.map((p) => p.dm || p.jid), 'add')
+    const refused = (res || []).filter((r) => r?.status && !['200', '201'].includes(String(r.status)))
+    if (refused.length) console.warn('[loup-garou] ajout au groupe des morts refusé pour', refused.length, 'joueur(s), codes :', refused.map((r) => r.status).join(','))
   } catch (e) {
     console.warn('[loup-garou] ajout au groupe des morts impossible :', e.message)
   }
-  await inviteMissing(jid, players, message)
+  await inviteMissing(jid, players, message) // ceux qui n’ont pas pu être ajoutés reçoivent un lien
 }
 
 const removePlayer = async (jid, p) => {
@@ -59,34 +65,63 @@ const removePlayer = async (jid, p) => {
 }
 
 const necroOf = (g) => g.players.find((p) => p.role === 'necromancien' && p.alive)
-const INVITE_DEAD = '👻 Je n’ai pas pu t’ajouter au groupe des morts (réglage de confidentialité ?). Rejoins-le avec ce lien, sans le partager :'
 
-// Ajoute au groupe les joueurs morts (le crée au premier mort). À appeler après chaque résolution de morts.
-export const syncDeadGroup = async (g) => {
-  if (!g.players.some((p) => p.role === 'necromancien')) return
-  const souls = g.players.filter((p) => !p.alive)
-  if (!souls.length) return
-  const dg = g.deadGroup
-  if (!dg) {
+// Création : on essaie plusieurs formes de participants (numéro, identifiant, puis groupe vide complété ensuite)
+const createGroup = async (souls) => {
+  const forms = [souls.map((p) => p.dm), souls.map((p) => p.jid), []].filter((l, i, a) => a.findIndex((x) => x.join() === l.join()) === i)
+  let lastErr = null
+  for (const participants of forms) {
     try {
-      const meta = await sock.groupCreate(NAME, souls.map((p) => p.dm))
-      g.deadGroup = { jid: meta.id, added: new Set(souls), necroIn: false }
-      trackWolfGroup(meta.id) // suivi en base : dissous au redémarrage si la partie est perdue ; commandes ignorées ici
-      await inviteMissing(meta.id, souls, INVITE_DEAD)
-      await say(
-        meta.id,
-        `👻 *LES MORTS*\n\nBienvenue chez les défunts : ${listOf(souls)}\n\n` +
-          `🗣️ Ici, parlez librement : les vivants ne vous lisent pas.\n` +
-          `🕯️ Chaque nuit, un visiteur — *le Nécromancien* — peut descendre vous poser des questions jusqu’à l’aube. Répondez… ou trompez-le !\n` +
-          `🤫 Ne dévoilez rien aux vivants : c’est une règle d’honneur.`,
-        jidsOf(souls)
-      )
+      const meta = await sock.groupCreate(NAME, participants)
+      if (meta?.id) return { meta, lastErr: null }
+      lastErr = new Error('réponse sans identifiant de groupe')
     } catch (e) {
-      console.warn('[loup-garou] création du groupe des morts impossible :', e.message)
-      g.deadGroup = null
+      lastErr = e
+      console.warn(`[loup-garou] création du groupe des morts refusée (${participants.length} participant(s)) :`, e.message)
+      await sleep(1200)
+    }
+  }
+  return { meta: null, lastErr }
+}
+
+const createDeadGroup = async (g, souls) => {
+  const { meta, lastErr } = await createGroup(souls)
+  if (!meta) {
+    // L’échec doit être VISIBLE (une seule fois par partie) ; on réessaie à la prochaine mort
+    if (!g.deadGroupWarned) {
+      g.deadGroupWarned = true
+      await say(g.key, `⚠️ Je n’ai pas pu créer le groupe des morts (${String(lastErr?.message || 'erreur inconnue').slice(0, 120)}). Je réessaierai à la prochaine mort.`)
     }
     return
   }
+  // Le groupe existe : on le mémorise AVANT toute autre opération, pour ne jamais le perdre ni le recréer en double
+  g.deadGroup = { jid: meta.id, added: new Set(souls), necroIn: false }
+  trackWolfGroup(meta.id) // suivi en base : dissous au redémarrage si la partie est perdue ; commandes ignorées ici
+  const necroInGame = g.players.some((p) => p.role === 'necromancien')
+  try {
+    const inGroup = await memberIds(meta.id)
+    await addPlayers(meta.id, souls.filter((p) => !isIn(inGroup, p)), INVITE_DEAD) // ceux qui n’ont pas pu être ajoutés à la création
+    await say(
+      meta.id,
+      `👻 *LES MORTS*\n\nBienvenue chez les défunts : ${listOf(souls)}\n\n` +
+        `🗣️ Ici, parlez librement : les vivants ne vous lisent pas.\n` +
+        (necroInGame ? `🕯️ Chaque nuit, un visiteur — *le Nécromancien* — peut descendre vous poser des questions jusqu’à l’aube. Répondez… ou trompez-le !\n` : '') +
+        `🤫 Ne dévoilez rien aux vivants : c’est une règle d’honneur.`,
+      jidsOf(souls)
+    )
+    await say(g.key, '👻 Un groupe des morts vient d’être créé : les éliminés y sont ajoutés (ou reçoivent un lien d’invitation en privé).')
+  } catch (e) {
+    console.warn('[loup-garou] finalisation du groupe des morts incomplète :', e.message)
+  }
+}
+
+// Ajoute au groupe les joueurs morts (le crée au premier mort). À appeler après chaque résolution de morts.
+export const syncDeadGroup = async (g) => {
+  if (!DEAD_GROUP) return
+  const souls = g.players.filter((p) => !p.alive)
+  if (!souls.length) return
+  const dg = g.deadGroup
+  if (!dg) return createDeadGroup(g, souls)
   const fresh = souls.filter((p) => !dg.added.has(p))
   if (!fresh.length) return
   for (const p of fresh) dg.added.add(p)
@@ -114,10 +149,16 @@ export const dismissNecro = async (g) => {
 export const necroVisit = async (g, seconds) => {
   const necro = necroOf(g)
   if (!necro) return
-  await syncDeadGroup(g)
+  await syncDeadGroup(g) // crée le groupe s’il y a des morts et qu’il n’existe pas encore (nouvelle tentative)
   const dg = g.deadGroup
   if (!dg) {
-    await sendText([necro.dm, necro.jid], '👻 *NÉCROMANCIEN* — Personne n’est encore mort : aucune âme à interroger cette nuit. Reviens quand le village aura perdu quelqu’un…')
+    const anyDead = g.players.some((p) => !p.alive)
+    await sendText(
+      [necro.dm, necro.jid],
+      anyDead
+        ? '👻 *NÉCROMANCIEN* — Le groupe des morts n’a pas pu être créé cette nuit (WhatsApp l’a refusé). Je réessaie à la prochaine mort.'
+        : '👻 *NÉCROMANCIEN* — Personne n’est encore mort : aucune âme à interroger cette nuit. Reviens quand le village aura perdu quelqu’un…'
+    )
     return
   }
   await addPlayers(dg.jid, [necro], INVITE_DEAD)

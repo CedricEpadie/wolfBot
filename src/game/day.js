@@ -18,10 +18,11 @@ const holdNote = (g) => {
 // `explicit` = vote fait avec la commande « /loup vote @x » (réponse d’erreur utile). Un simple @ dans la discussion
 // qui ne désigne pas un joueur vivant (ou soi-même) est ignoré en silence : ce n’est pas un vote.
 // Fonctionne pour l’élection du maire (phase « mayor », on peut voter pour soi) et pour le vote du village (phase « vote »).
-export const registerVote = async (g, voter, targetJid, explicit = false) => {
+export const registerVote = async (g, voter, target, explicit = false) => {
   if (!isVotePhase(g) || !voter?.alive) return
   const election = g.phase === 'mayor'
-  const suspect = g.players.find((p) => p.alive && p.ids.has(num(targetJid)))
+  // target : un joueur (vote par numéro ou « moi ») ou un jid (mention)
+  const suspect = typeof target === 'string' ? g.players.find((p) => p.alive && p.ids.has(num(target))) : target?.alive ? target : null
   if (!suspect) return explicit ? say(g.key, `⛔ ${tag(voter.jid)} : ce joueur n’est pas en vie ou ne participe pas.`, [voter.jid]) : undefined
   if (suspect === voter && !election) return explicit ? say(g.key, `⛔ ${tag(voter.jid)} : tu ne peux pas voter contre toi-même !`, [voter.jid]) : undefined
   const changed = g.votes.has(voter)
@@ -68,12 +69,13 @@ export const day = async (g) => {
   g.phase = 'vote'
   g.votes = new Map()
   const voters = living(g)
+  g.voteList = voters // la liste numérotée affichée : permet « /loup vote 3 »
   const seconds = voteSeconds(g) // un peu plus long si un Mentaliste est dans la partie
   const visions = visionMarks(seconds)
   await say(
     g.key,
     `🗳️ *VOTE DU VILLAGE*\n${tell('voteStart')}\n\n👥 *Joueurs en vie*\n${voters.map((p, i) => `${i + 1}. ${tag(p.jid)}${p === g.mayor ? ' 👑' : ''}`).join('\n')}\n\n` +
-      `👉 Pour voter, *mentionne (@)* le suspect : un seul @ par message.\n` +
+      `👉 Pour voter : *mentionne (@)* le suspect (un seul @ par message) ou tape *${P}loup vote 3* (numéro de la liste).\n` +
       `Répondre à un message ne compte pas • votes publics • le dernier vote compte • pas de vote pour soi-même.\n` +
       (g.mayor?.alive ? `👑 La voix du maire compte *double* et il tranche les égalités.\n` : '') +
       `⏱️ *${seconds} s*`,

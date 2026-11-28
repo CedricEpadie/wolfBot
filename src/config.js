@@ -60,7 +60,9 @@ export const INFO_DELIVERY = (process.env.INFO_DELIVERY || 'photo').toLowerCase(
 
 // ───────── Nécromancien et Mentaliste ─────────
 // Désactivables si tu ne veux pas ces rôles (NECROMANCER=false : plus de groupe des morts ; MENTALIST=false).
-export const NECROMANCER = (process.env.NECROMANCER || 'true').toLowerCase() !== 'false'
+// Groupe des morts : créé au premier mort, chaque mort y est ajouté (false = désactivé, et le Nécromancien aussi)
+export const DEAD_GROUP = (process.env.DEAD_GROUP || 'true').toLowerCase() !== 'false'
+export const NECROMANCER = (process.env.NECROMANCER || 'true').toLowerCase() !== 'false' && DEAD_GROUP
 export const MENTALIST = (process.env.MENTALIST || 'true').toLowerCase() !== 'false'
 export const NECRO_MIN_PLAYERS = 8 // le Nécromancien apparaît à partir de ce nombre de joueurs
 export const MENTALIST_MIN_PLAYERS = 10 // le Mentaliste apparaît à partir de ce nombre de joueurs

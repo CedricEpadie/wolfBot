@@ -1,11 +1,11 @@
 // 💀 Morts : annonce, tir du chasseur, silence des morts
 import { P, COMMAND_WORDS, REVEAL_ROLES, DEAD_SILENCE, HUNTER_SECONDS } from '../config.js'
 import { sock } from '../whatsapp/socket.js'
-import { say, sendText } from '../whatsapp/messaging.js'
-import { norm, sleep, tag } from '../utils.js'
-import { alive, living } from './players.js'
+import { say, sendInfoCard } from '../whatsapp/messaging.js'
+import { escRe, norm, num, onCooldown, sleep, tag } from '../utils.js'
+import { alive, jidsOf, living } from './players.js'
 import { ROLES } from './roles.js'
-import { askPick } from './prompts.js'
+import { listCard } from '../cards/render.js'
 import { finishStep, waitStep } from './timers.js'
 import { syncWolfGroup } from './wolfGroup.js'
 import { syncDeadGroup } from './deadGroup.js'
@@ -22,25 +22,56 @@ export const deathLine = (p) => (REVEAL_ROLES ? `☠️ ${tag(p.jid)} — c’é
 export const deathReport = (p, kind, extra = {}) =>
   `${tell(`death.${kind}`, { player: tag(p.jid), ...extra })}\n${deathLine(p)}\n${epitaph(p)}`
 
+// Le chasseur tire sa dernière balle EN PUBLIC : la carte de choix est postée dans le groupe principal, il répond dans le
+// groupe (numéro ou @mention) et tout le monde voit qui il emporte avec lui. Sans réponse à temps, il ne tire pas.
+const HUNTER_REPLY = new RegExp(`^(?:${escRe(P)}\\s*(?:loup|loups|lg)\\s+)?(?:tir(?:e|er)?\\s+)?(\\d{1,2})$`, 'i')
+
+// Appelé pour chaque message du chasseur pendant son tir ; retourne true si le message a été pris en compte
+export const handleHunterReply = async (g, text, mentioned = []) => {
+  const hp = g.hunterPick
+  if (!hp || g.phase !== 'hunter') return false
+  let target = null
+  if (mentioned.length === 1) {
+    target = hp.targets.find((t) => t.ids.has(num(mentioned[0]))) || null
+  } else {
+    const m = HUNTER_REPLY.exec(text.trim())
+    if (!m) return false // simple bavardage : traité comme un message de mort (supprimé)
+    target = hp.targets[Number(m[1]) - 1] || null
+  }
+  if (!target) {
+    if (!onCooldown(`hunter-hint:${g.key}`, 4)) await say(g.key, `⛔ ${tag(hp.hunter.jid)} : cible invalide. Réponds avec un numéro entre *1* et *${hp.targets.length}* (voir la carte).`, [hp.hunter.jid])
+    return true
+  }
+  hp.chosen = target
+  finishStep(g)
+  return true
+}
+
 const hunterShot = async (g, h) => {
   const targets = living(g)
   if (!targets.length || !alive(g)) return
   g.phase = 'hunter'
-  await say(g.key, tell('hunterStart', { player: tag(h.jid), s: HUNTER_SECONDS }), [h.jid])
-  let chosen = null
-  await askPick(g, h, {
-    role: 'chasseur',
-    title: 'TIRE !',
-    subtitle: `Dernière balle • ${HUNTER_SECONDS} s`,
-    items: targets,
-    notes: ['Réponds avec le numéro du joueur à abattre.'],
-    onPick: (t) => {
-      chosen = t
-      finishStep(g)
-    },
-  })
-  await waitStep(g, HUNTER_SECONDS, { marks: [10], tick: () => sendText([h.dm, h.jid], '⏳ Plus que 10 secondes pour tirer !') })
-  g.prompts.clear()
+  g.hunterPick = { hunter: h, targets, chosen: null }
+  const caption =
+    `${tell('hunterStart', { player: tag(h.jid), s: HUNTER_SECONDS })}\n\n` +
+    `🎯 ${tag(h.jid)}, désigne ta cible *ici, dans le groupe* : réponds par son *numéro* (ou mentionne-la avec @). Tout le monde verra ton choix.`
+  const fallback = `${caption}\n\n${targets.map((p, i) => `${i + 1}. ${tag(p.jid)}`).join('\n')}`
+  await sendInfoCard(
+    g.key,
+    () =>
+      listCard({
+        role: 'chasseur',
+        title: 'TIRE !',
+        subtitle: `Dernière balle • ${HUNTER_SECONDS} s`,
+        items: targets,
+        notes: ['Réponds dans le groupe avec le numéro de ta cible.', 'Tout le monde verra ton choix.'],
+      }),
+    fallback,
+    { caption, mentions: [h.jid], fallbackMentions: [h.jid, ...jidsOf(targets)] }
+  )
+  await waitStep(g, HUNTER_SECONDS, { marks: [10], tick: () => say(g.key, `⏳ ${tag(h.jid)} : plus que 10 secondes pour tirer !`, [h.jid]) })
+  const chosen = g.hunterPick?.chosen || null
+  g.hunterPick = null
   if (!alive(g)) return
   if (chosen) {
     chosen.alive = false

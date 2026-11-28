@@ -11,7 +11,7 @@ export const RULES = () =>
   `\n` +
   `🛡️ Le Garde ne peut pas protéger deux nuits de suite la même personne. Un joueur protégé n’est pas dévoré.\n` +
   `🧙‍♀️ La Sorcière a 1 potion de vie et 1 potion de mort, une seule potion par nuit.\n` +
-  `🏹 Le Chasseur emporte un joueur dans sa mort (nuit ou vote).\n` +
+  `🏹 Le Chasseur emporte un joueur dans sa mort (nuit ou vote) : il désigne sa cible *dans le groupe*, tout le monde voit son choix.\n` +
   `🔮 La Voyante est bavarde : le rôle qu’elle découvre est annoncé à tous${VOYANTE_REVEAL_NAME ? ' avec le nom du joueur' : ' (sans le nom du joueur)'}.\n` +
   (NECROMANCER ? `👻 Le Nécromancien (dès ${NECRO_MIN_PLAYERS} joueurs) rejoint chaque nuit le *groupe des morts*, créé au premier mort, pour les interroger : ils peuvent répondre… ou mentir. Il en est retiré à l’aube.\n` : '') +
   (MENTALIST ? `🎩 Le Mentaliste (dès ${MENTALIST_MIN_PLAYERS} joueurs) reçoit en privé, pendant le vote, des prémonitions vagues sur la tournure du vote. Le vote dure alors un peu plus longtemps.\n` : '') +
@@ -29,5 +29,5 @@ export const HELP = () =>
   `🐺 *LOUP-GAROU — commandes*\n\n` +
   `*${P}loup* — ouvrir une partie\n*${P}loup join* — rejoindre\n*${P}loup go* — lancer (lanceur)\n*${P}loup stop* — annuler (lanceur)\n` +
   `*${P}loup role* — renvoyer ma carte (aussi en privé)\n*${P}loup roles* — rôles et composition\n*${P}loup regles* — règles\n` +
-  `*${P}loup etat* — état de la partie\n*${P}loup vivants* — joueurs en vie\n*${P}loup vote @x* — voter\n` +
+  `*${P}loup etat* — état de la partie\n*${P}loup vivants* — joueurs en vie\n*${P}loup vote @x* / *vote 3* — voter (par mention ou numéro) ; *vote moi* — se choisir (élection du maire)\n` +
   `*${P}loup passer* — passer le débat (lanceur)\n*${P}loup top* — classement\n*${P}loup stats* — mes statistiques (ou *stats @x*)\n*${P}loup ouvrir* — rouvrir le groupe`

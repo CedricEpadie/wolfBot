@@ -8,7 +8,7 @@ Bot autonome (Baileys), lancé en arrière-plan avec **pm2** via **yarn**. Préf
 |---|---|
 | 🐺 Loup-Garou | choisit une victime chaque nuit avec ses complices |
 | 🧙‍♀️ Sorcière | 1 potion de vie + 1 potion de mort (une seule potion par nuit) |
-| 🏹 Chasseur | à sa mort (nuit ou vote), il tire une dernière balle |
+| 🏹 Chasseur | à sa mort (nuit ou vote), il tire une dernière balle **en public** |
 | 🔮 Voyante bavarde | découvre un rôle chaque nuit… et **le village l'apprend** (sans son nom) |
 | 🛡️ Garde | protège un joueur chaque nuit (pas deux fois de suite le même) |
 | 👻 Nécromancien *(dès 8 joueurs)* | rejoint chaque nuit le groupe des morts pour les interroger |
@@ -116,7 +116,7 @@ Les cartes affichent le nom de **profil** du joueur, pas le nom enregistré dans
 4. **Jour** (groupe rouvert) : annonce dramatique des morts (rôle révélé + épitaphe), annonce de la voyante bavarde, débat chronométré,
    puis **vote** : la liste des joueurs en vie est envoyée dans le groupe, on vote en **mentionnant (@)** le suspect : un seul @ par message, et répondre à un message ne vote pas.
    Votes publics, fin anticipée quand tout le monde a voté. L'annonce des morts de nuit est volontairement neutre : on ne dit jamais *comment* le joueur est mort.
-5. Le Chasseur tire quand il meurt (30 s). Fin de partie : récap des rôles, statistiques mises à jour, classement `/loup top`.
+5. Le Chasseur tire quand il meurt, **en public** : la carte de choix (joueurs vivants numérotés) est postée dans le **groupe principal**, il répond dans le groupe par le **numéro** de sa cible (`3`), en la **mentionnant** (@) ou avec `/loup tir 3` (30 s ; sans réponse il ne tire pas). Tout le monde voit qui il emporte. Son tir n'est plus envoyé en privé. Fin de partie : récap des rôles, statistiques mises à jour, classement `/loup top`.
 
 ### L'aléatoire 🎲
 Tout ce qui est « au hasard » passe par un seul module, `src/random.js` : générateur **cryptographique** (`node:crypto`), mélange de Fisher-Yates sans biais (vérifié par test du χ² : permutations et positions équiprobables), jamais `Math.random`.
@@ -135,12 +135,13 @@ Au **jour 1**, avant le débat, le village élit un maire (60 s, on vote en ment
 - Désactivable avec `MAYOR=false`.
 
 ### Le Nécromancien 👻 et le groupe des morts
-- Le **groupe des morts** est un groupe WhatsApp créé par le bot **au premier mort** (seulement si la partie compte un Nécromancien). Chaque mort y est ajouté dès son élimination et y reste : ils peuvent discuter librement, les vivants ne les lisent pas. Si on ne peut pas ajouter un joueur (confidentialité), il reçoit un lien d'invitation en privé.
+- Le **groupe des morts** est un groupe WhatsApp créé par le bot **dès le premier mort** (qu'il y ait un Nécromancien dans la partie ou non). **Chaque nouveau mort y est ajouté** dès son élimination et y reste : ils peuvent discuter librement, les vivants ne les lisent pas. Si on ne peut pas ajouter un joueur (confidentialité), il reçoit un lien d'invitation en privé.
 - **Chaque nuit**, le Nécromancien est ajouté au groupe, **pendant que les autres rôles jouent**, pour au moins `NIGHT_NECRO_SECONDS` (90 s) : l'aube ne se lève pas avant. Il pose ses questions ; les morts répondent… ou mentent. **À l'aube il est retiré** : il n'est jamais dans le groupe de jour.
 - Nuit 1 (personne n'est encore mort) : il en est prévenu en privé. S'il meurt, il devient un mort comme les autres et reste dans le groupe.
 - Le groupe est dissous en fin de partie ; après un plantage, il est retrouvé (reprise) ou nettoyé (partie perdue).
 - ⚠️ Comme dans tout groupe WhatsApp, les membres voient le numéro de celui qui est ajouté : les morts savent donc qui est le Nécromancien (ils sont hors jeu, mais pourraient le répéter en privé).
-- Désactivable avec `NECROMANCER=false`.
+- Robustesse : si WhatsApp refuse la création, le bot essaie 3 formes de participants (numéro, identifiant, groupe vide complété ensuite), **affiche l'erreur dans le groupe principal** (une seule fois par partie) et réessaie à chaque mort suivante. Le groupe, une fois créé, n'est jamais « perdu » ni recréé en double. Si le Nécromancien ne peut pas y être ajouté, il reçoit un lien d'invitation en privé.
+- Désactivable avec `NECROMANCER=false` (plus de Nécromancien) ou `DEAD_GROUP=false` (plus de groupe des morts, donc plus de Nécromancien non plus).
 
 ### Le Mentaliste 🎩
 - Pendant le vote du village, il reçoit **deux prémonitions privées** (à mi-vote, puis vers la fin), volontairement vagues : *ça se passe bien* (le suspect en tête, voix double du maire comprise, est un loup), *quelque chose cloche* (c'est un innocent) ou *rien de net* (trop peu de votes, ou égalité). Jamais de nom, de chiffre ni de camp.
@@ -149,7 +150,7 @@ Au **jour 1**, avant le débat, le village élit un maire (60 s, on vote en ment
 
 ### Statistiques et reprise après plantage 💾
 Les données sont écrites dans `DATA_DIR` (par défaut `./data`, **à placer sur un volume persistant** en hébergement) :
-- `wolfbot.db` (SQLite) — table `players` : par groupe et par joueur — parties, victoires (loup / village), série en cours et record, survies, mandats de maire, rôles joués. Voir `/loup top` et `/loup stats [@x]`.
+- `wolfbot.db` (SQLite) — table `players` : par groupe et par joueur — parties, victoires (loup / village), série en cours et record, survies, mandats de maire, rôles joués. Voir `/loup top` et `/loup stats [@x]`. `/loup stats` répond par une **carte image** : rang dans le groupe, parties / victoires / taux (avec barre), victoires en loup et en village, série en cours et record, survies, mandats de maire, répartition des rôles joués et **6 derniers rôles reçus** (texte de repli si `INFO_DELIVERY=text`).
 - table `saved_games` : sauvegarde des parties en cours, écrite au début de chaque nuit et de chaque jour. Après un redémarrage, le bot **reprend la partie** (rôles, morts, potions, maire et groupe des loups conservés) ; la phase en cours recommence depuis son début. Une partie sauvegardée depuis plus de `RESUME_MAX_MINUTES` (120) est abandonnée et le groupe rouvert. Le salon d'attente et la distribution des cartes ne sont pas repris.
 - Les tables `game_history` (une ligne par partie terminée) et `wolf_groups` (groupes de loups à nettoyer après un plantage) complètent la base. Le schéma évolue via la liste `MIGRATIONS` de `src/persistence/db.js`.
 - Utilise le module `node:sqlite` intégré à Node : **Node ≥ 22.13 requis**, aucune dépendance native. Les anciens fichiers `stats.json` / `games.json` / `wolf-groups.json` (v2) sont importés automatiquement au premier lancement, puis renommés en `.imported`.
@@ -189,7 +190,8 @@ Toutes les mentions de joueurs sont de vraies mentions WhatsApp (@).
 | `/loup regles` | règles du jeu |
 | `/loup etat` | phase en cours et temps restant |
 | `/loup vivants` | joueurs en vie |
-| `/loup vote @x` | voter (ou simplement mentionner @x pendant le vote) |
+| `/loup vote @x` / `vote 3` | voter par mention ou par **numéro de la liste** affichée (ou simplement mentionner @x pendant le vote) |
+| `/loup vote moi` (ou `/loup moi`) | **voter pour soi-même** à l'élection du maire (se mentionner n'est pas toujours possible sur WhatsApp) |
 | `/loup passer` | passer le débat (lanceur) |
 | `/loup top` | classement des victoires |
 | `/loup stats [@x]` | statistiques d'un joueur (les siennes par défaut) |

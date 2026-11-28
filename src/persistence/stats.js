@@ -84,3 +84,15 @@ export const statsOf = (chat, ids) => {
   const row = num && d.prepare('SELECT * FROM players WHERE chat = ? AND num = ?').get(chat, num)
   return row ? toEntry(row) : null
 }
+
+// Rang d’un joueur dans le groupe (même ordre que topOf, joueurs sans victoire inclus) : { rank, total } ou null
+export const rankOf = (chat, ids) => {
+  const d = getDb()
+  const num = findNum(d, chat, ids)
+  if (!num) return null
+  const rows = d
+    .prepare('SELECT num FROM players WHERE chat = ? AND played > 0 ORDER BY wins DESC, (wins * 1.0 / MAX(played, 1)) DESC, played ASC')
+    .all(chat)
+  const i = rows.findIndex((r) => r.num === num)
+  return i < 0 ? null : { rank: i + 1, total: rows.length }
+}

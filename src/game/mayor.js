@@ -1,5 +1,5 @@
 // 👑 Le Maire : élu au jour 1, voix double, tranche les égalités, désigne son successeur s’il meurt.
-import { MAYOR, MAYOR_ELECTION_SECONDS, MAYOR_TIE_SECONDS, MAYOR_SUCCESSION_SECONDS } from '../config.js'
+import { P, MAYOR, MAYOR_ELECTION_SECONDS, MAYOR_TIE_SECONDS, MAYOR_SUCCESSION_SECONDS } from '../config.js'
 import { say, sendText } from '../whatsapp/messaging.js'
 import { pick, sleep, tag } from '../utils.js'
 import { alive, jidsOf, listOf, living } from './players.js'
@@ -36,10 +36,12 @@ export const electMayor = async (g) => {
   g.phase = 'mayor'
   g.votes = new Map()
   const voters = living(g)
+  g.voteList = voters // la liste numérotée affichée : permet « /loup vote 3 »
   await say(
     g.key,
     `👑 *ÉLECTION DU MAIRE*\n${tell('mayorElection')}\n\n👥 *Joueurs en vie*\n${voters.map((p, i) => `${i + 1}. ${tag(p.jid)}`).join('\n')}\n\n` +
-      `👉 Pour voter, *mentionne (@)* ton candidat : un seul @ par message (tu peux voter pour toi).\n` +
+      `👉 Pour voter : *mentionne (@)* ton candidat, ou tape *${P}loup vote 3* (numéro de la liste).\n` +
+      `🙋 *Voter pour toi-même* : tape *${P}loup vote moi*\n` +
       `👑 Le maire a *2 voix*, *tranche les égalités* et choisit son successeur s’il meurt.\n⏱️ *${MAYOR_ELECTION_SECONDS} s*`,
     jidsOf(voters)
   )
